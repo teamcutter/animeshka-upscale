@@ -176,6 +176,16 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/animeshka
 
 ## Usage
 
+### Run API
+
+```bash
+uv run uvicorn src.app:create_app --factory --reload --port 8000
+# Swagger: http://localhost:8000/docs
+```
+
+> Draft (#2): jobs are kept in memory, the upscaler is a Lanczos stub with the
+> `RealESRGANUpscaler` interface, video jobs are accepted but not processed yet.
+
 ### API
 
 ```bash
@@ -200,6 +210,7 @@ curl http://localhost:8000/api/jobs/<id>
 | `/api/upscale` | POST | Image upscale (`file`, `mode=2k|4k`, `max_size`) |
 | `/api/upscale/video` | POST | Video upscale (frame-wise) |
 | `/api/jobs/{id}` | GET | Job status + metrics |
+| `/api/jobs/{id}/result` | GET | Download upscaled file (when `done`) |
 | `/api/metrics` | GET | Prometheus metrics |
 | `/health` | GET | Health check |
 | `/docs` | GET | Swagger UI |
