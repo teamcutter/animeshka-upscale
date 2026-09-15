@@ -1,0 +1,37 @@
+[project]
+name = "animeshka-upscale"
+version = "0.1.0"
+description = "AI photo/video upscaler for vintage anime"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fastapi>=0.128",
+    "uvicorn>=0.40",
+    "pydantic-settings>=2.13",
+    "pyyaml>=6.0",
+    "python-multipart>=0.0.20",
+    "pillow>=12.0",
+    "prometheus-fastapi-instrumentator>=7.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.28",
+    "ruff>=0.14",
+    "ty>=0.0.1a20",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.File", "fastapi.Form", "fastapi.Depends"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
