@@ -1,0 +1,17 @@
+app:
+  host: 0.0.0.0
+  port: 8000
+upscale:
+  model_path: ./weights/upscale_model
+  tile_size: 512
+  device: cpu        # cuda|cpu
+image:
+  max_size_mb: 10
+  max_width: 2048
+  max_height: 2048
+video:
+  max_size_mb: 200
+storage:
+  dir: ./data
+log:
+  level: INFO
