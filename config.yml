@@ -1,0 +1,13 @@
+upscale:
+  model_path: "./weights/upscale_model"
+  tile_size: 512
+  device: "auto"
+  scale: 2
+
+image:
+  max_size_mb: 10
+  max_width: 2048
+  max_height: 2048
+
+log:
+  level: "INFO"
