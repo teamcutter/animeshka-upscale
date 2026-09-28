@@ -217,6 +217,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+.DS_Store
+
+weights/
 # Animeshka: uploaded inputs / upscaled outputs, model weights
 data/
 weights/**/*.pth
