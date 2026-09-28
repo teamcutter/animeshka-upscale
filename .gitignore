@@ -220,3 +220,6 @@ __marimo__/
 .DS_Store
 
 weights/
+# Animeshka: uploaded inputs / upscaled outputs, model weights
+data/
+weights/**/*.pth

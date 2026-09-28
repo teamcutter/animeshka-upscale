@@ -1,3 +1,4 @@
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -9,8 +10,12 @@ description = "AI photo/video upscaler for vintage anime — dual Real-ESRGAN pi
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+    "fastapi>=0.128",
+    "uvicorn>=0.40",
     "pydantic-settings==2.13.0",
     "pyyaml==6.0.3",
+    "python-multipart>=0.0.20",
+    "prometheus-fastapi-instrumentator>=7.0",
     "torch==2.5.1",
     "torchvision==0.20.1",
     "opencv-python-headless==4.13.0.90",
@@ -39,6 +44,7 @@ explicit = true
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28",
     "pytest==9.0.2",
     "pytest-asyncio>=1.3.0",
     "ruff==0.15.2",
@@ -49,13 +55,15 @@ dev = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.File", "fastapi.Form", "fastapi.Depends"]
 
 [tool.ty.environment]
 python-version = "3.11"

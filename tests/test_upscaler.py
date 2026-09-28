@@ -1,5 +1,7 @@
+import pytest
 import torch
 from PIL import Image
+
 from src.infrastructure.upscale import RRDBNet
 from src.infrastructure.upscale.upscaler import RealESRGANUpscaler, UpscalerConfig
 
@@ -14,11 +16,8 @@ def test_rrdb_forward():
 def test_upscaler_enhance_no_weights(tmp_path):
     cfg = UpscalerConfig(device="cpu", tile_size=64, model_path=str(tmp_path), scale=2)
     up = RealESRGANUpscaler(cfg)
-    try:
+    with pytest.raises(FileNotFoundError):
         up.load_model()
-        assert False, "should raise FileNotFoundError"
-    except FileNotFoundError:
-        pass
 
 
 def test_enhance_with_mock_model():
