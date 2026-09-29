@@ -19,11 +19,21 @@ class RRDB(nn.Module):
 
 
 class RRDBNet(nn.Module):
-    def __init__(self, in_nc: int = 3, out_nc: int = 3, nf: int = 64, nb: int = 23, gc: int = 32):
+    def __init__(
+        self,
+        in_nc: int = 3,
+        out_nc: int = 3,
+        nf: int = 64,
+        nb: int = 23,
+        gc: int = 32,
+        scale: int = 2,
+    ):
         super().__init__()
-        self.scale = 2
-        self.pixel_unshuffle = nn.PixelUnshuffle(2)
-        in_nc = in_nc * 4
+        self.scale = scale
+        # The body always upsamples x4: x2 weights unshuffle by 2 first, x4 weights take RGB as is.
+        unshuffle = {1: 4, 2: 2, 4: 1}[scale]
+        self.pixel_unshuffle = nn.PixelUnshuffle(unshuffle) if unshuffle > 1 else nn.Identity()
+        in_nc = in_nc * unshuffle * unshuffle
         self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1)
         self.body = nn.Sequential(*[RRDB(nf, gc) for _ in range(nb)])
         self.conv_body = nn.Conv2d(nf, nf, 3, 1, 1)

@@ -1,0 +1,89 @@
+# docker compose up --build        -> API :8000, Grafana :3000, PostgreSQL :5432
+# docker compose up -d postgres    -> only the database, run API/worker locally with uv
+name: animeshka
+
+x-app: &app
+  build: .
+  image: animeshka-upscale:dev
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE__URL: postgresql://animeshka:animeshka@postgres:5432/animeshka
+    DATABASE__AUTO_MIGRATE: "false"
+    WORKER__EMBEDDED: "false"
+    STORAGE__DIR: /app/data
+    UPSCALE__MODEL_PATH: /app/weights/upscale_model
+  volumes:
+    - ./data:/app/data
+    - ./weights:/app/weights:ro
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: animeshka
+      POSTGRES_PASSWORD: animeshka
+      POSTGRES_DB: animeshka
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U animeshka -d animeshka"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: applies Alembic migrations before api/worker start.
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "src.worker"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana:/var/lib/grafana
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  grafana:

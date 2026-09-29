@@ -67,7 +67,7 @@ class RealESRGANUpscaler:
             raise FileNotFoundError(f"Real-ESRGAN weights not found: {model_path}")
 
         logger.info(f"Loading Real-ESRGAN model from {model_path}")
-        self.model = RRDBNet(in_nc=3, out_nc=3, nf=64, nb=23, gc=32)
+        self.model = RRDBNet(in_nc=3, out_nc=3, nf=64, nb=23, gc=32, scale=self.scale)
 
         state_dict = torch.load(model_path, map_location=self.device, weights_only=True)
         if "params_ema" in state_dict:

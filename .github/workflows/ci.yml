@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: animeshka
+          POSTGRES_PASSWORD: animeshka
+          POSTGRES_DB: animeshka_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U animeshka"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Ruff
+        run: uv run ruff check src tests migrations
+
+      - name: Ruff format
+        run: uv run ruff format --check src tests migrations
+
+      - name: Ty
+        run: uv run ty check src tests
+
+      - name: Pytest (SQLite)
+        run: uv run pytest -v
+
+      - name: Pytest (PostgreSQL)
+        env:
+          TEST_DATABASE_URL: postgresql://animeshka:animeshka@localhost:5432/animeshka_test
+        run: uv run pytest -v

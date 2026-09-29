@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -22,11 +23,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        container.startup()
+        # With an external worker the API never runs the model, so it doesn't load it.
+        container.startup(load_models=settings.worker.embedded)
         yield
         container.shutdown()
 
-    app = FastAPI(title=settings.app.title, version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title=settings.app.title, version="0.2.0", lifespan=lifespan)
     app.state.container = container
 
     @app.exception_handler(AppError)
@@ -34,8 +36,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     @app.get("/health", tags=["health"])
-    def health() -> dict[str, str]:
-        return {"status": "ok", "device": settings.upscale.device}
+    async def health() -> JSONResponse:
+        database_ok = await run_in_threadpool(container.database_ok)
+        return JSONResponse(
+            status_code=200 if database_ok else 503,
+            content={
+                "status": "ok" if database_ok else "degraded",
+                "database": "ok" if database_ok else "unavailable",
+                "backend": settings.upscale.backend,
+                "worker": "embedded" if settings.worker.embedded else "external",
+            },
+        )
 
     app.include_router(upscale_router)
     Instrumentator().instrument(app).expose(app, endpoint="/api/metrics", include_in_schema=False)

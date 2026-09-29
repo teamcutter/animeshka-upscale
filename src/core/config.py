@@ -20,6 +20,8 @@ class AppSettings(BaseModel):
 
 
 class UpscaleSettings(BaseModel):
+    # stub = Lanczos without weights (tests/CI), realesrgan = RRDB model from model_path
+    backend: Literal["stub", "realesrgan"] = "stub"
     model_path: Path = Path("./weights/upscale_model")
     tile_size: int = Field(default=512, ge=64, le=2048)
     device: Literal["auto", "cuda", "mps", "cpu"] = "auto"
@@ -46,6 +48,18 @@ class StorageSettings(BaseModel):
     dir: Path = Path("./data")
 
 
+class DatabaseSettings(BaseModel):
+    # SQLite works out of the box; docker-compose points this at PostgreSQL.
+    url: str = "sqlite:///./data/animeshka.db"
+    auto_migrate: bool = True
+
+
+class WorkerSettings(BaseModel):
+    # True: the API process runs jobs itself; False: jobs wait for `python -m src.worker`.
+    embedded: bool = True
+    poll_interval: float = Field(default=1.0, gt=0)
+
+
 class LogSettings(BaseModel):
     level: str = "INFO"
     file: str | None = None
@@ -67,8 +81,9 @@ class Settings(BaseSettings):
     image: ImageSettings = Field(default_factory=ImageSettings)
     video: VideoSettings = Field(default_factory=VideoSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    worker: WorkerSettings = Field(default_factory=WorkerSettings)
     log: LogSettings = Field(default_factory=LogSettings)
-    database_url: str | None = None
 
     @classmethod
     def settings_customise_sources(

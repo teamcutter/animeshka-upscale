@@ -1,0 +1,19 @@
+apiVersion: 1
+
+# Tables: jobs, files, metrics (see migrations/). Example panel query:
+#   SELECT j.mode, avg(m.value) AS seconds
+#   FROM metrics m JOIN jobs j ON j.id = m.job_id
+#   WHERE m.name = 'processing_seconds' GROUP BY j.mode
+datasources:
+  - name: Animeshka PostgreSQL
+    uid: animeshka-postgres
+    type: grafana-postgresql-datasource
+    url: postgres:5432
+    user: animeshka
+    secureJsonData:
+      password: animeshka
+    jsonData:
+      database: animeshka
+      sslmode: disable
+      postgresVersion: 1600
+    isDefault: true
