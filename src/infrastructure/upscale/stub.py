@@ -2,9 +2,9 @@ from PIL import Image
 
 
 class StubUpscaler:
-    """Lanczos stand-in for RealESRGANUpscaler until the RRDB module (#1) lands.
+    """Lanczos stand-in for RealESRGANUpscaler: no weights, no torch.
 
-    Mirrors its resizing contract: input is downsized so the output fits max_size.
+    Used in tests/CI and on machines without the model weights (upscale.backend: stub).
     """
 
     def __init__(self, scale: int) -> None:
@@ -13,14 +13,10 @@ class StubUpscaler:
     def load_model(self) -> None:
         pass
 
-    def warmup(self, max_size: int = 1920) -> None:
+    def warmup(self) -> None:
         pass
 
-    def enhance(self, image: Image.Image, max_size: int = 1920) -> Image.Image:
-        limit = max_size // self.scale
-        if max(image.size) > limit:
-            image = image.copy()
-            image.thumbnail((limit, limit), Image.Resampling.LANCZOS)
+    def enhance(self, image: Image.Image) -> Image.Image:
         width, height = image.size
         return image.resize((width * self.scale, height * self.scale), Image.Resampling.LANCZOS)
 

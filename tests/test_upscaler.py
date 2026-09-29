@@ -13,6 +13,13 @@ def test_rrdb_forward():
     assert y.shape == (1, 3, 16, 16)
 
 
+def test_rrdb_forward_x4():
+    # x4 weights (RealESRGAN_x4plus) have no pixel-unshuffle: conv_first takes plain RGB.
+    net = RRDBNet(scale=4)
+    assert net.conv_first.in_channels == 3
+    assert net(torch.randn(1, 3, 8, 8)).shape == (1, 3, 32, 32)
+
+
 def test_upscaler_enhance_no_weights(tmp_path):
     cfg = UpscalerConfig(device="cpu", tile_size=64, model_path=str(tmp_path), scale=2)
     up = RealESRGANUpscaler(cfg)

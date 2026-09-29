@@ -16,6 +16,9 @@ dependencies = [
     "pyyaml==6.0.3",
     "python-multipart>=0.0.20",
     "prometheus-fastapi-instrumentator>=7.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
     "torch==2.5.1",
     "torchvision==0.20.1",
     "opencv-python-headless==4.13.0.90",
@@ -25,6 +28,7 @@ dependencies = [
 
 [project.scripts]
 animeshka-upscale = "src.cli:main"
+animeshka-worker = "src.worker:main"
 
 [tool.uv.sources]
 torch = [

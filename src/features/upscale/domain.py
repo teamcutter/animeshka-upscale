@@ -26,8 +26,22 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
-def _now() -> datetime:
+class FileRole(StrEnum):
+    INPUT = "input"
+    OUTPUT = "output"
+
+
+def now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+@dataclass
+class MediaFile:
+    role: FileRole
+    path: Path
+    size_bytes: int
+    width: int | None = None
+    height: int | None = None
 
 
 @dataclass
@@ -35,15 +49,17 @@ class Job:
     kind: MediaKind
     mode: Mode
     original_filename: str
-    input_path: Path
+    input: MediaFile
+    max_size: int = 1920
     id: UUID = field(default_factory=uuid4)
     status: JobStatus = JobStatus.QUEUED
-    output_path: Path | None = None
+    output: MediaFile | None = None
     error: str | None = None
-    created_at: datetime = field(default_factory=_now)
-    updated_at: datetime = field(default_factory=_now)
+    metrics: dict[str, float] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=now_utc)
+    updated_at: datetime = field(default_factory=now_utc)
 
     def mark(self, status: JobStatus, *, error: str | None = None) -> None:
         self.status = status
         self.error = error
-        self.updated_at = _now()
+        self.updated_at = now_utc()

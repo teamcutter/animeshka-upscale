@@ -2,6 +2,7 @@ app:
   host: 0.0.0.0
   port: 8000
 upscale:
+  backend: stub      # stub|realesrgan
   model_path: ./weights/upscale_model
   tile_size: 512
   device: auto       # auto|cuda|mps|cpu
@@ -14,5 +15,11 @@ video:
   max_size_mb: 200
 storage:
   dir: ./data
+database:
+  url: sqlite:///./data/animeshka.db   # postgresql://user:pass@host:5432/db
+  auto_migrate: true
+worker:
+  embedded: true     # false -> run `python -m src.worker`
+  poll_interval: 1.0
 log:
   level: INFO
