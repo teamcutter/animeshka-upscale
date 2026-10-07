@@ -1,12 +1,13 @@
-# docker compose up --build        -> API :8000, Grafana :3000, PostgreSQL :5432
-# docker compose up -d postgres    -> only the database, run API/worker locally with uv
+# docker compose up --build        -> UI :8080, API :8000, Grafana :3000, PostgreSQL :5432
+# docker compose up -d postgres    -> only the database, run backend/frontend locally
+# GPU: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 name: animeshka
 
-x-app: &app
-  build: .
-  image: animeshka-upscale:dev
+x-backend: &backend
+  build: ./backend
+  image: animeshka-backend:dev
   env_file:
-    - path: .env
+    - path: ./backend/.env
       required: false
   environment:
     DATABASE__URL: postgresql://animeshka:animeshka@postgres:5432/animeshka
@@ -15,8 +16,8 @@ x-app: &app
     STORAGE__DIR: /app/data
     UPSCALE__MODEL_PATH: /app/weights/upscale_model
   volumes:
-    - ./data:/app/data
-    - ./weights:/app/weights:ro
+    - ./backend/data:/app/data
+    - ./backend/weights:/app/weights:ro
 
 services:
   postgres:
@@ -37,7 +38,7 @@ services:
 
   # One-shot: applies Alembic migrations before api/worker start.
   migrate:
-    <<: *app
+    <<: *backend
     command: ["alembic", "upgrade", "head"]
     restart: "no"
     depends_on:
@@ -45,7 +46,7 @@ services:
         condition: service_healthy
 
   api:
-    <<: *app
+    <<: *backend
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -63,12 +64,23 @@ services:
       retries: 5
 
   worker:
-    <<: *app
+    <<: *backend
     command: ["python", "-m", "src.worker"]
     restart: unless-stopped
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  # nginx with the built SPA; proxies /api and /health to `api`.
+  frontend:
+    build: ./frontend
+    image: animeshka-frontend:dev
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
 
   grafana:
     image: grafana/grafana:11.3.0
