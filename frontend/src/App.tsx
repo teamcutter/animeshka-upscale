@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
 import { UploadCloud, Loader2, AlertCircle, Download } from 'lucide-react';
@@ -27,7 +27,7 @@ export default function App() {
     multiple: false
   });
 
-  const simulateApiCall = (file: File) => {
+  const simulateApiCall = (_file: File) => {
     setAppState('Uploading');
     setTimeout(() => {
       setAppState('Processing/Inference');

@@ -6,6 +6,11 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
+# ffmpeg/ffprobe: video re-mux (audio track) for the video pipeline.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependencies first so code changes don't reinstall torch.
 COPY pyproject.toml README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
