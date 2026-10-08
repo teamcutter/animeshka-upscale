@@ -1,35 +1,3 @@
-# React + TypeScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
 # Animeshka Upscale
 
 AI photo/video upscaler for vintage anime (pre-1980s–90s) — dual Real-ESRGAN inference pipeline with objective + perceptual quality analytics and Grafana dashboard.
@@ -109,6 +77,8 @@ class UpscalerConfig:
 | `pyyaml` 6.0 | — | `config.yml` |
 | `prometheus-fastapi-instrumentator` 7.0 | — | metrics |
 | `httpx`, `python-multipart` | — | API |
+| `sqlalchemy` 2.0 + `alembic` 1.14 | — | ORM + migrations |
+| `psycopg` 3 | — | PostgreSQL driver |
 
 > Package manager: **uv**. Dev: `pytest`, `ruff`, `ty`.
 
@@ -116,32 +86,47 @@ class UpscalerConfig:
 
 ```
 animeshka-upscale/
-├── src/
-│   ├── app.py                  # FastAPI factory
-│   ├── container.py            # DI
-│   ├── core/config.py          # Settings (app/model/upscale/image/log)
-│   ├── features/
-│   │   ├── upscale/api/        # POST /upscale, GET /jobs/{id}
-│   │   └── analytics/          # PSNR/SSIM/VMAF + LR QoP
-│   ├── infrastructure/
-│   │   ├── upscale/            # rrdb.py, residual_dense_block.py, upscaler.py
-│   │   ├── analytics/metrics.py
-│   │   └── storage/            # PostgreSQL
-│   └── shared/
-├── weights/
-│   ├── upscale_2k/RealESRGAN_x2plus.pth   # lightweight
-│   └── upscale_4k/RealESRGAN_x4plus.pth   # full
-├── config.yml
-├── pyproject.toml              # uv
-├── docker-compose.yml
-├── docker-compose.cpu.yml
+├── backend/                        # Python: API, worker, inference, CLI (uv)
+│   ├── src/
+│   │   ├── app.py                  # FastAPI factory
+│   │   ├── worker.py               # queue worker (python -m src.worker)
+│   │   ├── cli.py                  # offline image/video upscale
+│   │   ├── container.py            # DI
+│   │   ├── core/config.py          # Settings (app/model/upscale/image/log)
+│   │   ├── features/
+│   │   │   ├── upscale/api/        # POST /upscale, GET /jobs/{id}
+│   │   │   └── analytics/          # PSNR/SSIM/VMAF + LR QoP
+│   │   ├── infrastructure/
+│   │   │   ├── upscale/            # rrdb.py, residual_dense_block.py, upscaler.py
+│   │   │   ├── analytics/metrics.py
+│   │   │   ├── db/                 # SQLAlchemy engine, models, migrate
+│   │   │   └── storage/            # SqlJobRepository, local files
+│   │   └── shared/
+│   ├── tests/
+│   ├── migrations/                 # Alembic (alembic.ini)
+│   ├── weights/upscale_model/      # RealESRGAN_x2plus.pth (2K), RealESRGAN_x4plus.pth (4K)
+│   ├── config.yml
+│   ├── pyproject.toml
+│   └── Dockerfile                  # python + uv + ffmpeg
+├── frontend/                       # React + TypeScript + Vite + Tailwind (npm)
+│   ├── src/
+│   ├── public/
+│   ├── nginx.conf                  # serves the SPA, proxies /api -> api:8000
+│   ├── package.json
+│   └── Dockerfile                  # node build -> nginx
+├── deploy/grafana/                 # Grafana datasource provisioning
+├── docker-compose.yml              # postgres, migrate, api, worker, frontend, grafana
+├── docker-compose.gpu.yml          # override: NVIDIA GPU for the worker
 └── Research_Memo_Sprint1_GOST.docx
 ```
 
+Each part has its own README: [backend](backend/README.md), [frontend](frontend/README.md).
+
 ## Requirements
 
-* Python 3.11–3.12, [uv](https://docs.astral.sh/uv/) ≥0.4
-* `ffmpeg` for video remux (optional)
+* Docker + Docker Compose — enough to run everything
+* For local development: Python 3.11–3.12 + [uv](https://docs.astral.sh/uv/) ≥0.4, Node.js 24 + npm
+* `ffmpeg` for video remux (optional locally, included in the backend image)
 * PostgreSQL 15+ , Grafana 10+ (docker-compose provides)
 * NVIDIA GPU with CUDA 12.1+ recommended; CPU fallback works (slow)
 
@@ -151,72 +136,123 @@ animeshka-upscale/
 git clone <repo> animeshka-upscale
 cd animeshka-upscale
 
-# create env + install (uv)
-uv sync
-# with dev deps
-uv sync --group dev
-
-# activate
-source .venv/bin/activate  # or uv run <cmd>
+# backend (uv)
+cd backend && uv sync --group dev && cd ..
+# frontend (npm)
+cd frontend && npm ci && cd ..
 ```
 
 ### Weights
 
 ```bash
-mkdir -p weights/upscale_model
-curl -L -o weights/upscale_model/RealESRGAN_x2plus.pth \
+mkdir -p backend/weights/upscale_model
+curl -L -o backend/weights/upscale_model/RealESRGAN_x2plus.pth \
   https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth
 # 4K variant (x4) — same API, scale=4
-curl -L -o weights/upscale_model/RealESRGAN_x4plus.pth \
-  https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x4plus.pth
+curl -L -o backend/weights/upscale_model/RealESRGAN_x4plus.pth \
+  https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
 
-# or 2K lightweight — distilled / fewer nb (place as weights/upscale_2k/)
+# or 2K lightweight — distilled / fewer nb (place as backend/weights/upscale_2k/)
 ```
 
-Grafana + Postgres via Docker:
+### Docker
+
+Full stack (PostgreSQL + migrations + API + worker + frontend + Grafana):
 
 ```bash
-docker compose up --build          # GPU (CUDA)
-docker compose -f docker-compose.cpu.yml up --build  # CPU
+docker compose up --build     # UI :8080, API :8000, Grafana :3000 (admin/admin), PostgreSQL :5432
+docker compose up -d postgres # only the database, run backend/frontend locally
+# worker on an NVIDIA GPU (nvidia-container-toolkit):
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 ```
+
+`migrate` applies Alembic migrations once, then `api` (queues jobs) and `worker` (runs the model)
+start; `frontend` is nginx serving the built SPA and proxying `/api` to `api`, so the UI at
+http://localhost:8080 needs no CORS. `backend/data` and `backend/weights` are mounted into the
+backend containers; `backend/.env` is picked up if present.
 
 ## Configuration
 
-`config.yml` + `.env` (env overrides YAML, `__` nesting):
+`backend/config.yml` + `backend/.env` (env overrides YAML, `__` nesting):
 
 ```yaml
 # config.yml
 upscale:
+  backend: stub      # stub (Lanczos, no weights) | realesrgan
   model_path: ./weights/upscale_model
   tile_size: 512
-  device: cuda        # cuda|cpu
+  device: auto       # auto|cuda|mps|cpu
 image:
   max_size_mb: 10
   max_width: 2048
   max_height: 2048
+database:
+  url: sqlite:///./data/animeshka.db   # postgresql://user:pass@host:5432/db
+  auto_migrate: true                   # run Alembic on startup
+worker:
+  embedded: true     # true: API runs jobs itself; false: run `python -m src.worker`
+  poll_interval: 1.0
 log:
   level: INFO
 ```
 
 ```bash
-# .env
-APP__PORT=8000
-UPSCALE__DEVICE=cuda
-UPSCALE__TILE_SIZE=512
-DATABASE_URL=postgresql://user:pass@localhost:5432/animeshka
+# .env (see .env.example)
+UPSCALE__BACKEND=realesrgan
+DATABASE__URL=postgresql://animeshka:animeshka@localhost:5432/animeshka
+WORKER__EMBEDDED=false
 ```
 
 ## Usage
 
+Backend commands (`uv run ...`) run from `backend/`, frontend commands (`npm ...`) from `frontend/`.
+
 ### Run API
 
 ```bash
+cd backend
 uv run uvicorn src.app:create_app --factory --reload --port 8000
 # Swagger: http://localhost:8000/docs
 ```
 
-> Draft (#2): jobs are kept in memory, the upscaler is a Lanczos stub with the
-> `RealESRGANUpscaler` interface, video jobs are accepted but not processed yet.
+Defaults need nothing else: SQLite in `backend/data/animeshka.db`, jobs run inside the API process.
+
+### Run frontend
+
+```bash
+cd frontend
+npm run dev    # http://localhost:5173, /api is proxied to the API on :8000
+```
+
+### Run with PostgreSQL and a separate worker
+
+```bash
+docker compose up -d postgres
+# .env: DATABASE__URL=postgresql://animeshka:animeshka@localhost:5432/animeshka
+#       WORKER__EMBEDDED=false
+uv run alembic upgrade head          # or rely on DATABASE__AUTO_MIGRATE=true
+uv run uvicorn src.app:create_app --factory --port 8000   # terminal 1: API, only queues jobs
+uv run python -m src.worker                               # terminal 2: worker, runs the model
+```
+
+Job lifecycle: `queued` → `processing` → `done | failed`. The worker claims jobs atomically
+(`UPDATE ... WHERE status='queued'`, `FOR UPDATE SKIP LOCKED` on PostgreSQL), so several workers
+can run in parallel.
+
+### Database
+
+Tables (`migrations/versions/`): `jobs` (status, mode, kind, timestamps), `files` (input/output
+path, size, resolution), `metrics` (`job_id`, `name`, `value`, e.g. `processing_seconds`;
+analytics adds PSNR/SSIM/QoP here). Grafana reads them through the provisioned PostgreSQL
+datasource.
+
+```bash
+uv run alembic upgrade head
+uv run alembic revision --autogenerate -m "add column"   # after changing backend/src/infrastructure/db/models.py
+uv run alembic downgrade -1
+```
+
+> Video jobs are accepted and stored but not processed yet (frame-wise pipeline lives in `backend/src/cli.py`).
 
 ### API
 
@@ -225,26 +261,30 @@ uv run uvicorn src.app:create_app --factory --reload --port 8000
 curl -X POST http://localhost:8000/api/upscale \
   -F "file=@input.jpg" -F "mode=2k" | jq
 
-# image 4K + metrics
+# image 4K, output long side <= 2048
 curl -X POST http://localhost:8000/api/upscale \
-  -F "file=@input.jpg" -F "mode=4k" -F "with_metrics=true"
+  -F "file=@input.jpg" -F "mode=4k" -F "max_size=2048"
 
 # video
 curl -X POST http://localhost:8000/api/upscale/video \
   -F "file=@clip.mp4" -F "mode=4k"
 
-# job status
+# job status (+ input/output resolution and metrics)
 curl http://localhost:8000/api/jobs/<id>
+
+# history, newest first
+curl "http://localhost:8000/api/jobs?status=done&limit=20&offset=0"
 ```
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/upscale` | POST | Image upscale (`file`, `mode=2k|4k`, `max_size`) |
 | `/api/upscale/video` | POST | Video upscale (frame-wise) |
+| `/api/jobs` | GET | Job history (`status`, `limit`, `offset`) |
 | `/api/jobs/{id}` | GET | Job status + metrics |
 | `/api/jobs/{id}/result` | GET | Download upscaled file (when `done`) |
 | `/api/metrics` | GET | Prometheus metrics |
-| `/health` | GET | Health check |
+| `/health` | GET | Health check (503 if the database is down) |
 | `/docs` | GET | Swagger UI |
 
 
@@ -279,7 +319,7 @@ Rules:
 
 * Branch from `main`, PR back to `main` — no long-lived branches.
 * Naming: `feature/<short>`, `fix/<short>`, `docs/<short>`, `chore/<short>` (e.g. `feature/upscaler-tile-fallback`).
-* PR requirements: `uv run ruff check` + `ty check` + `pytest` green, 1 approval, squash-merge. Delete branch after merge.
+* PR requirements: backend `ruff check` + `ty check` + `pytest` and frontend `npm run lint` + `npm run build` green, 1 approval, squash-merge. Delete branch after merge.
 * Commit style: Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`).
 * Never push directly to `main`; keep `main` deployable.
 
@@ -287,7 +327,8 @@ Rules:
 git checkout main && git pull
 git checkout -b feature/my-change
 # ... work ...
-uv run ruff check src/ && uv run ty check && uv run pytest -v
+(cd backend && uv run ruff check src tests migrations && uv run ty check src tests && uv run pytest -v)
+(cd frontend && npm run lint && npm run build)
 git push -u origin feature/my-change
 # open PR: feature/my-change → main
 ```
@@ -295,11 +336,20 @@ git push -u origin feature/my-change
 ## Development
 
 ```bash
-uv run ruff check src/
-uv run ruff format src/
-uv run ty check
-uv run pytest -v
+# backend/
+uv run ruff check src tests migrations
+uv run ruff format src tests migrations
+uv run ty check src tests
+uv run pytest -v                                   # SQLite in a temp dir
+TEST_DATABASE_URL=postgresql://animeshka:animeshka@localhost:5432/animeshka_test uv run pytest -v
+
+# frontend/
+npm run lint
+npm run build
 ```
+
+CI (`.github/workflows/ci.yml`) has two jobs: `backend` runs the suite twice (SQLite and a
+PostgreSQL service), `frontend` lints and builds the app.
 
 ## References
 
