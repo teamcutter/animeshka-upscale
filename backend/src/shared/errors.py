@@ -24,3 +24,9 @@ class InvalidMediaError(AppError):
 
 class JobNotReadyError(AppError):
     status_code = 409
+
+
+class ModeUnavailableError(AppError):
+    """The requested mode is valid but this server has no weights for it."""
+
+    status_code = 422

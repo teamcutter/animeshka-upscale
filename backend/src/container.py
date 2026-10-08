@@ -59,11 +59,20 @@ class Container:
         if self.settings.database.auto_migrate:
             upgrade_database(self.engine)
         if load_models:
-            for upscaler in self.upscalers.values():
+            for mode, upscaler in self.upscalers.items():
+                # A missing weight file disables that mode instead of taking the service down.
+                if not upscaler.is_available():
+                    logger.warning("Mode %s disabled: no weights for it", mode)
+                    continue
                 upscaler.load_model()
                 upscaler.warmup()
             self.models_loaded = True
-            logger.info("Upscalers ready (backend=%s)", self.settings.upscale.backend)
+            logger.info(
+                "Upscalers ready (backend=%s, modes=%s)",
+                self.settings.upscale.backend,
+                ", ".join(m.value for m, ok in self.upscale_service.available_modes.items() if ok)
+                or "none",
+            )
 
     def shutdown(self) -> None:
         if self.models_loaded:

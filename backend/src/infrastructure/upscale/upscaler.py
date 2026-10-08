@@ -53,16 +53,24 @@ class RealESRGANUpscaler:
             return "cpu"
         return req
 
+    @property
+    def weights_path(self) -> Path:
+        """RealESRGAN_x{scale}plus.pth inside model_path (relative paths resolve from backend/)."""
+        mp = Path(self.model_path)
+        if not mp.is_absolute():
+            mp = (Path(__file__).resolve().parents[3] / mp).resolve()
+        return mp / f"RealESRGAN_x{self.scale}plus.pth"
+
+    def is_available(self) -> bool:
+        return self.weights_path.is_file()
+
     def load_model(self) -> None:
         torch.backends.cudnn.benchmark = False
         if torch.cuda.is_available():
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
 
-        mp = Path(self.model_path)
-        if not mp.is_absolute():
-            mp = (Path(__file__).resolve().parents[3] / mp).resolve()
-        model_path = mp / f"RealESRGAN_x{self.scale}plus.pth"
+        model_path = self.weights_path
         if not model_path.exists():
             raise FileNotFoundError(f"Real-ESRGAN weights not found: {model_path}")
 

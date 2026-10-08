@@ -45,6 +45,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "database": "ok" if database_ok else "unavailable",
                 "backend": settings.upscale.backend,
                 "worker": "embedded" if settings.worker.embedded else "external",
+                "modes": {
+                    mode.value: ok for mode, ok in container.upscale_service.available_modes.items()
+                },
             },
         )
 

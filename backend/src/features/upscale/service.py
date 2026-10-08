@@ -13,6 +13,7 @@ from src.features.upscale.ports import FileStorage, JobRepository, Upscaler
 from src.shared.errors import (
     InvalidMediaError,
     JobNotReadyError,
+    ModeUnavailableError,
     NotFoundError,
     UnsupportedMediaTypeError,
 )
@@ -52,6 +53,18 @@ class UpscaleService:
     @property
     def image_limit_bytes(self) -> int:
         return self._image.max_size_mb * MB
+
+    @property
+    def available_modes(self) -> dict[Mode, bool]:
+        """Which modes this server can run (weights present); exposed in /health."""
+        return {mode: upscaler.is_available() for mode, upscaler in self._upscalers.items()}
+
+    def _require_mode(self, mode: Mode) -> None:
+        upscaler = self._upscalers.get(mode)
+        if upscaler is None or not upscaler.is_available():
+            raise ModeUnavailableError(
+                f"Mode {mode} is not available on this server (missing weights)"
+            )
 
     @property
     def video_limit_bytes(self) -> int:
@@ -158,6 +171,7 @@ class UpscaleService:
         width: int | None = None,
         height: int | None = None,
     ) -> Job:
+        self._require_mode(mode)
         job_id = uuid4()
         path = self._storage.save_input(job_id, filename, data)
         job = Job(

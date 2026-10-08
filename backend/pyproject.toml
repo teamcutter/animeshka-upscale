@@ -30,12 +30,13 @@ dependencies = [
 animeshka-upscale = "src.cli:main"
 animeshka-worker = "src.worker:main"
 
+# CUDA wheels only exist for x86_64; arm64 Linux (Docker on Apple Silicon) and macOS use PyPI (CPU/MPS).
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cu121", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { index = "pytorch-cu121", marker = "(sys_platform == 'linux' or sys_platform == 'win32') and platform_machine == 'x86_64'" },
 ]
 torchvision = [
-    { index = "pytorch-cu121", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { index = "pytorch-cu121", marker = "(sys_platform == 'linux' or sys_platform == 'win32') and platform_machine == 'x86_64'" },
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -166,6 +166,30 @@ docker compose up -d postgres # only the database, run backend/frontend locally
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 ```
 
+A mode is available only if its weight file exists in `upscale.model_path`
+(`RealESRGAN_x2plus.pth` for `2k`, `RealESRGAN_x4plus.pth` for `4k`). A missing file disables that
+mode instead of failing startup: `/health` reports `"modes": {"2k": true, "4k": false}`, uploads
+with a disabled mode get `422`, and the UI greys the option out.
+
+```bash
+curl http://localhost:8000/health
+# {"status":"ok","database":"ok","backend":"realesrgan","worker":"embedded","modes":{"2k":true,"4k":false}}
+```
+
+#### macOS (Apple Silicon)
+
+Docker Desktop, OrbStack or Podman all work; the images are linux/arm64 and the worker runs the
+model on CPU (no GPU passthrough on macOS, so leave `docker-compose.gpu.yml` out). CUDA wheels only
+exist for x86_64; `backend/pyproject.toml` pins the CUDA index to that architecture and arm64 falls
+back to the CPU wheels from PyPI.
+
+```bash
+# Podman: the VM needs more than the default memory for torch
+podman machine set --memory 8192 && podman machine start
+echo "UPSCALE__BACKEND=realesrgan" > backend/.env
+podman compose up --build            # same compose file; uses docker-compose under the hood
+```
+
 `migrate` applies Alembic migrations once, then `api` (queues jobs) and `worker` (runs the model)
 start; `frontend` is nginx serving the built SPA and proxying `/api` to `api`, so the UI at
 http://localhost:8080 needs no CORS. `backend/data` and `backend/weights` are mounted into the
@@ -223,6 +247,12 @@ Defaults need nothing else: SQLite in `backend/data/animeshka.db`, jobs run insi
 cd frontend
 npm run dev    # http://localhost:5173, /api is proxied to the API on :8000
 ```
+
+The UI talks to the API only through relative URLs (`frontend/src/api.ts`). The header badge reads
+`/health` (active backend, available modes); the main tab does `POST /api/upscale` (or
+`/api/upscale/video`) → polls `GET /api/jobs/{id}` until `done|failed` → shows the original (kept in
+the browser) against `GET /api/jobs/{id}/result` in the before/after slider; the history tab lists
+`GET /api/jobs` with result thumbnails and downloads.
 
 ### Run with PostgreSQL and a separate worker
 
@@ -284,7 +314,7 @@ curl "http://localhost:8000/api/jobs?status=done&limit=20&offset=0"
 | `/api/jobs/{id}` | GET | Job status + metrics |
 | `/api/jobs/{id}/result` | GET | Download upscaled file (when `done`) |
 | `/api/metrics` | GET | Prometheus metrics |
-| `/health` | GET | Health check (503 if the database is down) |
+| `/health` | GET | Health check (503 if the database is down) + `modes` available on this server |
 | `/docs` | GET | Swagger UI |
 
 
