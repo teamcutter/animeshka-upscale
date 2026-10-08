@@ -23,8 +23,16 @@ def test_rrdb_forward_x4():
 def test_upscaler_enhance_no_weights(tmp_path):
     cfg = UpscalerConfig(device="cpu", tile_size=64, model_path=str(tmp_path), scale=2)
     up = RealESRGANUpscaler(cfg)
+    assert up.weights_path == tmp_path / "RealESRGAN_x2plus.pth"
+    assert not up.is_available()
     with pytest.raises(FileNotFoundError):
         up.load_model()
+
+
+def test_upscaler_is_available_when_weights_exist(tmp_path):
+    (tmp_path / "RealESRGAN_x4plus.pth").write_bytes(b"not a real checkpoint")
+    cfg = UpscalerConfig(device="cpu", tile_size=64, model_path=str(tmp_path), scale=4)
+    assert RealESRGANUpscaler(cfg).is_available()
 
 
 def test_enhance_with_mock_model():

@@ -15,6 +15,10 @@ class Upscaler(Protocol):
 
     scale: int
 
+    def is_available(self) -> bool:
+        """True if this upscaler can be loaded on this machine (e.g. its weights exist)."""
+        ...
+
     def load_model(self) -> None: ...
 
     def warmup(self) -> None: ...

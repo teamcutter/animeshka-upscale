@@ -1,10 +1,12 @@
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from src.app import create_app
+from src.core.config import UpscaleSettings
 from tests.conftest import SettingsFactory, make_png
 
 
@@ -26,6 +28,7 @@ def test_health(client: TestClient) -> None:
         "database": "ok",
         "backend": "stub",
         "worker": "embedded",
+        "modes": {"2k": True, "4k": True},
     }
 
 
@@ -120,6 +123,27 @@ def test_list_jobs_newest_first_with_status_filter(client: TestClient) -> None:
 
     page = client.get("/api/jobs", params={"limit": 1, "offset": 1}).json()
     assert [job["id"] for job in page] == [image_id]
+
+
+def test_realesrgan_without_weights_disables_modes(
+    make_settings: SettingsFactory, tmp_path: Path
+) -> None:
+    # Real backend but no .pth files: the API still starts and reports both modes as unavailable.
+    settings = make_settings()
+    settings.upscale = UpscaleSettings(backend="realesrgan", model_path=tmp_path / "no-weights")
+    with TestClient(create_app(settings)) as client:
+        health = client.get("/health").json()
+        assert health["backend"] == "realesrgan"
+        assert health["modes"] == {"2k": False, "4k": False}
+
+        response = client.post(
+            "/api/upscale",
+            files={"file": ("frame.png", make_png(), "image/png")},
+            data={"mode": "2k"},
+        )
+        assert response.status_code == 422
+        assert "not available" in response.json()["detail"]
+        assert client.get("/api/jobs").json() == []
 
 
 def test_jobs_survive_restart(make_settings: SettingsFactory) -> None:

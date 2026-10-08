@@ -10,6 +10,9 @@ class StubUpscaler:
     def __init__(self, scale: int) -> None:
         self.scale = scale
 
+    def is_available(self) -> bool:
+        return True
+
     def load_model(self) -> None:
         pass
 
