@@ -10,6 +10,7 @@ from PIL import Image, UnidentifiedImageError
 from src.core.config import ImageSettings, VideoSettings
 from src.features.upscale.domain import FileRole, Job, JobStatus, MediaFile, MediaKind, Mode
 from src.features.upscale.ports import FileStorage, JobRepository, Upscaler
+from src.shared import metrics
 from src.shared.errors import (
     InvalidMediaError,
     JobNotReadyError,
@@ -33,6 +34,13 @@ def fit_to_output(image: Image.Image, max_size: int, scale: int) -> Image.Image:
     image = image.copy()
     image.thumbnail((limit, limit), Image.Resampling.LANCZOS)
     return image
+
+
+def megapixels(media: MediaFile | None) -> float | None:
+    """Size of a media file in megapixels, when its resolution is known."""
+    if media is None or not media.width or not media.height:
+        return None
+    return media.width * media.height / 1e6
 
 
 class UpscaleService:
@@ -128,17 +136,45 @@ class UpscaleService:
 
     def _run(self, job: Job) -> None:
         logger.info("Processing %s job %s (mode=%s)", job.kind, job.id, job.mode)
-        if job.kind is MediaKind.VIDEO:
-            # TODO: frame-wise enhance() + ffmpeg re-mux (src/cli.py has the pipeline).
-            self._finish(job, JobStatus.FAILED, error="Video upscaling is not implemented yet")
-            return
+        started = time.perf_counter()
+        metrics.JOBS_IN_PROGRESS.labels(kind=job.kind.value).inc()
         try:
-            self._upscale_image(job)
-        except Exception as exc:
-            logger.exception("Job %s failed", job.id)
-            self._finish(job, JobStatus.FAILED, error=str(exc))
-            return
-        self._finish(job, JobStatus.DONE)
+            if job.kind is MediaKind.VIDEO:
+                # TODO: frame-wise enhance() + ffmpeg re-mux (src/cli.py has the pipeline).
+                self._finish(job, JobStatus.FAILED, error="Video upscaling is not implemented yet")
+            else:
+                try:
+                    self._upscale_image(job)
+                except Exception as exc:
+                    logger.exception("Job %s failed", job.id)
+                    self._finish(job, JobStatus.FAILED, error=str(exc))
+                else:
+                    self._finish(job, JobStatus.DONE)
+        finally:
+            metrics.JOBS_IN_PROGRESS.labels(kind=job.kind.value).dec()
+            self._observe(job, time.perf_counter() - started)
+
+    def _observe(self, job: Job, duration_seconds: float) -> None:
+        """Publish a finished job to Prometheus (plotted in Grafana)."""
+        output = job.output
+        input_megapixels = megapixels(job.input)
+        output_megapixels = megapixels(output)
+        throughput = (
+            output_megapixels / duration_seconds
+            if output_megapixels is not None and duration_seconds > 0
+            else None
+        )
+        metrics.observe_job(
+            kind=job.kind.value,
+            mode=job.mode.value,
+            status=job.status.value,
+            duration_seconds=duration_seconds,
+            input_bytes=job.input.size_bytes,
+            output_bytes=output.size_bytes if output is not None else None,
+            input_megapixels=input_megapixels,
+            output_megapixels=output_megapixels,
+            megapixels_per_second=throughput,
+        )
 
     def _upscale_image(self, job: Job) -> None:
         upscaler = self._upscalers[job.mode]
@@ -150,6 +186,8 @@ class UpscaleService:
 
         output = self._storage.output_path(job.id, ".png")
         result.save(output, format="PNG")
+        input_megapixels = megapixels(job.input)
+        output_megapixels = result.width * result.height / 1e6
         job.output = MediaFile(
             role=FileRole.OUTPUT,
             path=output,
@@ -158,7 +196,13 @@ class UpscaleService:
             height=result.height,
         )
         job.metrics["processing_seconds"] = round(elapsed, 4)
-        job.metrics["output_megapixels"] = round(result.width * result.height / 1e6, 4)
+        job.metrics["output_megapixels"] = round(output_megapixels, 4)
+        job.metrics["input_size_bytes"] = float(job.input.size_bytes)
+        job.metrics["output_size_bytes"] = float(job.output.size_bytes)
+        if input_megapixels is not None:
+            job.metrics["input_megapixels"] = round(input_megapixels, 4)
+        if elapsed > 0:
+            job.metrics["megapixels_per_second"] = round(output_megapixels / elapsed, 4)
 
     def _create_job(
         self,

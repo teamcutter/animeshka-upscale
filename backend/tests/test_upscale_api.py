@@ -44,6 +44,11 @@ def test_upscale_image_flow(client: TestClient, mode: str, scale: int) -> None:
     assert job["output"]["width"] == 64 * scale
     assert job["output"]["height"] == 48 * scale
     assert job["metrics"]["processing_seconds"] >= 0
+    assert job["metrics"]["input_megapixels"] > 0
+    assert job["metrics"]["output_megapixels"] > 0
+    assert job["metrics"]["megapixels_per_second"] > 0
+    assert job["metrics"]["input_size_bytes"] > 0
+    assert job["metrics"]["output_size_bytes"] > 0
 
     result = client.get(job["result_url"])
     assert result.status_code == 200
@@ -161,3 +166,12 @@ def test_metrics_exposed(client: TestClient) -> None:
     client.get("/health")
     response = client.get("/api/metrics")
     assert response.status_code == 200
+
+
+def test_business_metrics_exposed(client: TestClient) -> None:
+    upload(client, mode="2k")
+    body = client.get("/api/metrics").text
+    assert 'upscale_jobs_total{kind="image",mode="2k",status="done"}' in body
+    assert "upscale_job_duration_seconds" in body
+    assert "upscale_input_bytes" in body
+    assert "upscale_megapixels_per_second" in body

@@ -1,0 +1,15 @@
+apiVersion: 1
+
+# File-based dashboard provisioning: every *.json in this folder is loaded into
+# the "Animeshka" folder. See dashboards/.
+providers:
+  - name: Animeshka
+    orgId: 1
+    folder: Animeshka
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
