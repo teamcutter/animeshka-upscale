@@ -14,6 +14,7 @@ import threading
 
 from src.container import Container
 from src.core.config import Settings
+from src.shared.metrics import start_worker_metrics_server
 
 logger = logging.getLogger("src.worker")
 
@@ -26,6 +27,8 @@ def run(settings: Settings | None = None, *, once: bool = False) -> int:
     settings = settings or Settings()
     container = Container.build(settings)
     container.startup(load_models=True)
+    if settings.metrics.enabled:
+        start_worker_metrics_server(settings.metrics.worker_port)
     stop = threading.Event()
 
     def request_stop(signum: int, _: object) -> None:
