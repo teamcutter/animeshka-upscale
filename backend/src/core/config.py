@@ -60,6 +60,12 @@ class WorkerSettings(BaseModel):
     poll_interval: float = Field(default=1.0, gt=0)
 
 
+class AuthSettings(BaseModel):
+    session_days: int = Field(default=30, ge=1)
+    # True behind HTTPS: the browser then sends the session cookie only over TLS.
+    cookie_secure: bool = False
+
+
 class LogSettings(BaseModel):
     level: str = "INFO"
     file: str | None = None
@@ -83,6 +89,7 @@ class Settings(BaseSettings):
     storage: StorageSettings = Field(default_factory=StorageSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
     log: LogSettings = Field(default_factory=LogSettings)
 
     @classmethod

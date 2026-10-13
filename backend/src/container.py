@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from sqlalchemy import Engine, text
 
 from src.core.config import Settings, UpscaleSettings
+from src.features.auth.service import AuthService
 from src.features.upscale.domain import Mode
 from src.features.upscale.ports import Upscaler
 from src.features.upscale.service import UpscaleService
@@ -11,6 +12,7 @@ from src.infrastructure.db.engine import create_db_engine, create_session_factor
 from src.infrastructure.db.migrate import upgrade_database
 from src.infrastructure.storage.files import LocalFileStorage
 from src.infrastructure.storage.sql import SqlJobRepository
+from src.infrastructure.storage.users import SqlUserRepository
 from src.infrastructure.upscale import RealESRGANUpscaler, UpscalerConfig
 from src.infrastructure.upscale.stub import StubUpscaler
 
@@ -40,20 +42,28 @@ class Container:
     engine: Engine
     upscalers: dict[Mode, Upscaler]
     upscale_service: UpscaleService
+    auth_service: AuthService
     models_loaded: bool = False
 
     @classmethod
     def build(cls, settings: Settings) -> "Container":
         engine = create_db_engine(settings.database.url)
+        sessions = create_session_factory(engine)
         upscalers = build_upscalers(settings.upscale)
         service = UpscaleService(
-            jobs=SqlJobRepository(create_session_factory(engine)),
+            jobs=SqlJobRepository(sessions),
             storage=LocalFileStorage(settings.storage.dir),
             upscalers=upscalers,
             image_settings=settings.image,
             video_settings=settings.video,
         )
-        return cls(settings=settings, engine=engine, upscalers=upscalers, upscale_service=service)
+        return cls(
+            settings=settings,
+            engine=engine,
+            upscalers=upscalers,
+            upscale_service=service,
+            auth_service=AuthService(SqlUserRepository(sessions), settings.auth),
+        )
 
     def startup(self, *, load_models: bool = True) -> None:
         if self.settings.database.auto_migrate:

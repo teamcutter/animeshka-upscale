@@ -2,12 +2,13 @@ from fastapi.testclient import TestClient
 
 from src.app import create_app
 from src.worker import run
-from tests.conftest import SettingsFactory, make_png
+from tests.conftest import SettingsFactory, make_png, register
 
 
 def test_external_worker_processes_queued_jobs(make_settings: SettingsFactory) -> None:
     settings = make_settings(embedded=False)
     with TestClient(create_app(settings)) as client:
+        register(client)
         assert client.get("/health").json()["worker"] == "external"
 
         job_ids = []

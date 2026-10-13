@@ -9,6 +9,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from src.container import Container
 from src.core.config import Settings
+from src.features.auth.api.router import router as auth_router
 from src.features.upscale.api.router import router as upscale_router
 from src.shared.errors import AppError
 
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    app.include_router(auth_router)
     app.include_router(upscale_router)
     Instrumentator().instrument(app).expose(app, endpoint="/api/metrics", include_in_schema=False)
     return app

@@ -17,3 +17,6 @@ class LocalFileStorage:
 
     def output_path(self, job_id: UUID, suffix: str) -> Path:
         return self._outputs / f"{job_id}{suffix}"
+
+    def delete(self, path: Path) -> None:
+        path.unlink(missing_ok=True)

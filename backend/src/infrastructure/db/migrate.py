@@ -13,15 +13,16 @@ def alembic_config() -> Config:
     return config
 
 
+# engine.connect(), not begin(): migrations/env.py manages the transaction itself.
 def upgrade_database(engine: Engine, revision: str = "head") -> None:
     config = alembic_config()
-    with engine.begin() as connection:
+    with engine.connect() as connection:
         config.attributes["connection"] = connection
         command.upgrade(config, revision)
 
 
 def downgrade_database(engine: Engine, revision: str = "base") -> None:
     config = alembic_config()
-    with engine.begin() as connection:
+    with engine.connect() as connection:
         config.attributes["connection"] = connection
         command.downgrade(config, revision)

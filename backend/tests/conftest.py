@@ -53,9 +53,25 @@ def make_settings(tmp_path: Path, database_url: str) -> SettingsFactory:
     return factory
 
 
+def register(
+    client: TestClient,
+    email: str = "anime@example.com",
+    password: str = "secret-pass",
+    name: str = "Анимешка",
+) -> dict:
+    """Creates an account; the client keeps the session cookie, so it is logged in after."""
+    response = client.post(
+        "/api/auth/register", json={"email": email, "password": password, "name": name}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 @pytest.fixture
 def client(make_settings: SettingsFactory) -> Iterator[TestClient]:
+    """A logged-in client."""
     with TestClient(create_app(make_settings())) as test_client:
+        register(test_client)
         yield test_client
 
 

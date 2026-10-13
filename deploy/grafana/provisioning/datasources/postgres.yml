@@ -1,9 +1,14 @@
 apiVersion: 1
 
-# Tables: jobs, files, metrics (see migrations/). Example panel query:
+# Tables: users, sessions, jobs, files, metrics (see backend/migrations/). Example panel queries:
 #   SELECT j.mode, avg(m.value) AS seconds
 #   FROM metrics m JOIN jobs j ON j.id = m.job_id
 #   WHERE m.name = 'processing_seconds' GROUP BY j.mode
+#
+#   SELECT j.mode, avg(m.value) AS psnr_db        -- also: ssim, sharpness_output
+#   FROM metrics m JOIN jobs j ON j.id = m.job_id
+#   WHERE m.name = 'psnr_db' GROUP BY j.mode
+# A one-row-per-job query is in the README (Analytics & Dashboard).
 datasources:
   - name: Animeshka PostgreSQL
     uid: animeshka-postgres
