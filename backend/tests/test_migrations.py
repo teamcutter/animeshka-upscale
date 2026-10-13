@@ -20,7 +20,9 @@ def test_migrations_match_models(database_url: str) -> None:
 def test_upgrade_and_downgrade(database_url: str) -> None:
     engine = create_db_engine(database_url)
     upgrade_database(engine)
-    assert {"jobs", "files", "metrics"} <= set(inspect(engine).get_table_names())
+    assert {"jobs", "files", "metrics", "users", "sessions"} <= set(
+        inspect(engine).get_table_names()
+    )
 
     downgrade_database(engine)
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}

@@ -30,11 +30,39 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-class JobRow(Base):
-    __tablename__ = "jobs"
-    __table_args__ = (Index("ix_jobs_status_created_at", "status", "created_at"),)
+class UserRow(Base):
+    __tablename__ = "users"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    name: Mapped[str] = mapped_column(String(64))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SessionRow(Base):
+    """Login sessions; the cookie holds the token, the table only its SHA-256."""
+
+    __tablename__ = "sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[UserRow] = relationship(lazy="joined")
+
+
+class JobRow(Base):
+    __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_status_created_at", "status", "created_at"),
+        Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    # NULL only for jobs created before accounts existed (migration 0002).
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String(16))
     mode: Mapped[str] = mapped_column(String(8))
     status: Mapped[str] = mapped_column(String(16))

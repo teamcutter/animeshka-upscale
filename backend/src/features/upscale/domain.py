@@ -52,6 +52,8 @@ class Job:
     input: MediaFile
     max_size: int = 1920
     id: UUID = field(default_factory=uuid4)
+    # The user who uploaded the file; None only for jobs from before accounts existed.
+    owner_id: UUID | None = None
     status: JobStatus = JobStatus.QUEUED
     output: MediaFile | None = None
     error: str | None = None

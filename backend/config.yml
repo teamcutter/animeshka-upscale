@@ -24,5 +24,8 @@ worker:
 metrics:
   enabled: true      # API serves /api/metrics; the worker binds worker_port for Prometheus
   worker_port: 9101
+auth:
+  session_days: 30
+  cookie_secure: false   # true behind HTTPS
 log:
   level: INFO

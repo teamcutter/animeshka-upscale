@@ -36,8 +36,17 @@ class JobRepository(Protocol):
     def update(self, job: Job) -> None: ...
 
     def list_jobs(
-        self, *, status: JobStatus | None = None, limit: int = 50, offset: int = 0
+        self,
+        *,
+        owner_id: UUID | None = None,
+        status: JobStatus | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[Job]: ...
+
+    def delete(self, job_id: UUID) -> bool:
+        """Delete a job with its files/metrics rows; False if it is processing or gone."""
+        ...
 
     def claim(self, job_id: UUID) -> Job | None:
         """Atomically move a queued job to processing; None if someone else took it."""
@@ -52,3 +61,5 @@ class FileStorage(Protocol):
     def save_input(self, job_id: UUID, filename: str, data: bytes) -> Path: ...
 
     def output_path(self, job_id: UUID, suffix: str) -> Path: ...
+
+    def delete(self, path: Path) -> None: ...

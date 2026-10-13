@@ -292,32 +292,55 @@ uv run alembic downgrade -1
 
 ### API
 
+Everything under `/api` except `/api/auth/*` and `/api/metrics` needs a login. The session lives
+in an HttpOnly cookie (`animeshka_session`, `SameSite=Lax`, 30 days by default), so the browser
+sends it by itself, also for `<img src>`, `<video src>` and download links to
+`/api/jobs/{id}/result`. Each user sees and downloads only their own jobs (someone else's job
+answers 404). In Swagger (`/docs`) call `/api/auth/login` once and the other requests work.
+
 ```bash
+# account: register logs in right away; -c/-b keep the session cookie in a file
+curl -c jar -H "Content-Type: application/json" http://localhost:8000/api/auth/register \
+  -d '{"email": "user@example.com", "password": "at-least-8", "name": "User"}'
+curl -c jar -H "Content-Type: application/json" http://localhost:8000/api/auth/login \
+  -d '{"email": "user@example.com", "password": "at-least-8"}'
+curl -b jar http://localhost:8000/api/auth/me
+
 # image 2K
-curl -X POST http://localhost:8000/api/upscale \
+curl -b jar -X POST http://localhost:8000/api/upscale \
   -F "file=@input.jpg" -F "mode=2k" | jq
 
 # image 4K, output long side <= 2048
-curl -X POST http://localhost:8000/api/upscale \
+curl -b jar -X POST http://localhost:8000/api/upscale \
   -F "file=@input.jpg" -F "mode=4k" -F "max_size=2048"
 
 # video
-curl -X POST http://localhost:8000/api/upscale/video \
+curl -b jar -X POST http://localhost:8000/api/upscale/video \
   -F "file=@clip.mp4" -F "mode=4k"
 
 # job status (+ input/output resolution and metrics)
-curl http://localhost:8000/api/jobs/<id>
+curl -b jar http://localhost:8000/api/jobs/<id>
 
-# history, newest first
-curl "http://localhost:8000/api/jobs?status=done&limit=20&offset=0"
+# my history, newest first
+curl -b jar "http://localhost:8000/api/jobs?status=done&limit=20&offset=0"
+
+# delete a job with its files
+curl -b jar -X DELETE http://localhost:8000/api/jobs/<id>
+
+curl -b jar -c jar -X POST http://localhost:8000/api/auth/logout
 ```
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/auth/register` | POST | Create an account (`email`, `password` 8+ chars, `name`) and log in; 201, 409 if the email is taken |
+| `/api/auth/login` | POST | Log in (`email`, `password`), sets the session cookie; 401 on wrong credentials |
+| `/api/auth/logout` | POST | End the session; 204 |
+| `/api/auth/me` | GET | Current user (`id`, `email`, `name`, `created_at`); 401 if not logged in |
 | `/api/upscale` | POST | Image upscale (`file`, `mode=2k|4k`, `max_size`) |
 | `/api/upscale/video` | POST | Video upscale (frame-wise) |
-| `/api/jobs` | GET | Job history (`status`, `limit`, `offset`) |
+| `/api/jobs` | GET | My job history (`status`, `limit`, `offset`) |
 | `/api/jobs/{id}` | GET | Job status + metrics |
+| `/api/jobs/{id}` | DELETE | Delete the job and its files; 204 (409 while it is processing) |
 | `/api/jobs/{id}/result` | GET | Download upscaled file (when `done`) |
 | `/api/metrics` | GET | Prometheus metrics |
 | `/health` | GET | Health check (503 if the database is down) + `modes` available on this server |
@@ -325,6 +348,35 @@ curl "http://localhost:8000/api/jobs?status=done&limit=20&offset=0"
 
 
 ## Analytics & Dashboard
+
+Every finished image job writes these rows into `metrics` (`job_id`, `name`, `value`), computed
+on the luma channel by `backend/src/features/upscale/quality.py`:
+
+| `name` | Meaning |
+|--------|---------|
+| `processing_seconds` | Model time only (no I/O, no metrics) |
+| `input_megapixels`, `output_megapixels` | Size of what the model got / returned |
+| `psnr_db`, `ssim` | Result shrunk back to the input size vs the input: faithfulness to the original (PSNR capped at 100) |
+| `sharpness_bicubic`, `sharpness_output` | Variance of the Laplacian of a plain bicubic resize vs the model output: detail added over a resize |
+
+Analytics adds its own rows the same way (e.g. `qop`, `vmaf`); no schema change is needed. One
+row per job for Grafana or pandas (works on PostgreSQL and SQLite):
+
+```sql
+SELECT j.id, j.user_id, j.mode, j.created_at,
+       fi.width AS in_w, fi.height AS in_h, fo.width AS out_w, fo.height AS out_h,
+       MAX(CASE WHEN m.name = 'processing_seconds' THEN m.value END) AS seconds,
+       MAX(CASE WHEN m.name = 'psnr_db' THEN m.value END)            AS psnr_db,
+       MAX(CASE WHEN m.name = 'ssim' THEN m.value END)               AS ssim,
+       MAX(CASE WHEN m.name = 'sharpness_bicubic' THEN m.value END)  AS sharp_bicubic,
+       MAX(CASE WHEN m.name = 'sharpness_output' THEN m.value END)   AS sharp_output
+FROM jobs j
+JOIN files fi ON fi.job_id = j.id AND fi.role = 'input'
+JOIN files fo ON fo.job_id = j.id AND fo.role = 'output'
+JOIN metrics m ON m.job_id = j.id
+WHERE j.status = 'done'
+GROUP BY j.id, j.user_id, j.mode, j.created_at, fi.width, fi.height, fo.width, fo.height;
+```
 
 * **Objective**: PSNR, SSIM (scikit-image / pyiqa), VMAF (`libvmaf` if available) before/after
 * **Subjective**: linear regression on 32 metric features → QoP/MOS 1–5 (sprint 1 model from Maksim)

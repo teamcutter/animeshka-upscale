@@ -78,7 +78,9 @@ class UpscaleService:
     def video_limit_bytes(self) -> int:
         return self._video.max_size_mb * MB
 
-    def create_image_job(self, filename: str, data: bytes, mode: Mode, max_size: int = 1920) -> Job:
+    def create_image_job(
+        self, filename: str, data: bytes, mode: Mode, max_size: int = 1920, *, owner_id: UUID
+    ) -> Job:
         try:
             with Image.open(BytesIO(data)) as img:
                 fmt, (width, height) = img.format, img.size
@@ -92,31 +94,55 @@ class UpscaleService:
                 f"Image {width}x{height} exceeds {self._image.max_width}x{self._image.max_height}"
             )
         return self._create_job(
-            MediaKind.IMAGE, filename, data, mode, max_size, width=width, height=height
+            MediaKind.IMAGE,
+            filename,
+            data,
+            mode,
+            max_size,
+            owner_id=owner_id,
+            width=width,
+            height=height,
         )
 
-    def create_video_job(self, filename: str, data: bytes, mode: Mode) -> Job:
+    def create_video_job(self, filename: str, data: bytes, mode: Mode, *, owner_id: UUID) -> Job:
         suffix = Path(filename).suffix.lower()
         if suffix not in VIDEO_EXTENSIONS:
             raise UnsupportedMediaTypeError(f"Unsupported video extension: {suffix or 'none'}")
-        return self._create_job(MediaKind.VIDEO, filename, data, mode, max_size=1920)
+        return self._create_job(
+            MediaKind.VIDEO, filename, data, mode, max_size=1920, owner_id=owner_id
+        )
 
-    def get_job(self, job_id: UUID) -> Job:
+    def get_job(self, job_id: UUID, owner_id: UUID) -> Job:
         job = self._jobs.get(job_id)
-        if job is None:
+        # Someone else's job is reported as missing: its id must not leak that it exists.
+        if job is None or job.owner_id != owner_id:
             raise NotFoundError(f"Job {job_id} not found")
         return job
 
     def list_jobs(
-        self, *, status: JobStatus | None = None, limit: int = 50, offset: int = 0
+        self,
+        owner_id: UUID,
+        *,
+        status: JobStatus | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[Job]:
-        return self._jobs.list_jobs(status=status, limit=limit, offset=offset)
+        return self._jobs.list_jobs(owner_id=owner_id, status=status, limit=limit, offset=offset)
 
-    def get_result_path(self, job_id: UUID) -> Path:
-        job = self.get_job(job_id)
+    def get_result_path(self, job_id: UUID, owner_id: UUID) -> Path:
+        job = self.get_job(job_id, owner_id)
         if job.status is not JobStatus.DONE or job.output is None:
             raise JobNotReadyError(f"Job {job_id} is {job.status}")
         return job.output.path
+
+    def delete_job(self, job_id: UUID, owner_id: UUID) -> None:
+        job = self.get_job(job_id, owner_id)
+        if not self._jobs.delete(job_id):
+            raise JobNotReadyError(f"Job {job_id} is being processed, try again later")
+        for media in (job.input, job.output):
+            if media is not None:
+                self._storage.delete(media.path)
+        logger.info("Deleted job %s", job_id)
 
     def process_job(self, job_id: UUID) -> None:
         """Process one specific job (embedded mode: called right after upload)."""
@@ -212,6 +238,7 @@ class UpscaleService:
         mode: Mode,
         max_size: int,
         *,
+        owner_id: UUID,
         width: int | None = None,
         height: int | None = None,
     ) -> Job:
@@ -220,6 +247,7 @@ class UpscaleService:
         path = self._storage.save_input(job_id, filename, data)
         job = Job(
             id=job_id,
+            owner_id=owner_id,
             kind=kind,
             mode=mode,
             original_filename=filename,

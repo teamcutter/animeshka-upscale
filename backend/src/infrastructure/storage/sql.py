@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.features.upscale.domain import (
@@ -17,7 +17,7 @@ from src.features.upscale.domain import (
 from src.infrastructure.db.models import FileRow, JobRow, MetricRow
 
 
-def _aware(value: datetime) -> datetime:
+def aware_utc(value: datetime) -> datetime:
     # SQLite drops the timezone; everything is stored in UTC.
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
@@ -36,6 +36,7 @@ def _to_domain(row: JobRow) -> Job:
     files = {FileRole(f.role): _to_file(f) for f in row.files}
     return Job(
         id=row.id,
+        owner_id=row.user_id,
         kind=MediaKind(row.kind),
         mode=Mode(row.mode),
         status=JobStatus(row.status),
@@ -45,12 +46,13 @@ def _to_domain(row: JobRow) -> Job:
         output=files.get(FileRole.OUTPUT),
         error=row.error,
         metrics={m.name: m.value for m in row.metrics},
-        created_at=_aware(row.created_at),
-        updated_at=_aware(row.updated_at),
+        created_at=aware_utc(row.created_at),
+        updated_at=aware_utc(row.updated_at),
     )
 
 
 def _apply(row: JobRow, job: Job) -> None:
+    row.user_id = job.owner_id
     row.kind = job.kind.value
     row.mode = job.mode.value
     row.status = job.status.value
@@ -111,13 +113,30 @@ class SqlJobRepository:
             _apply(row, job)
 
     def list_jobs(
-        self, *, status: JobStatus | None = None, limit: int = 50, offset: int = 0
+        self,
+        *,
+        owner_id: UUID | None = None,
+        status: JobStatus | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[Job]:
         stmt = select(JobRow).order_by(JobRow.created_at.desc()).limit(limit).offset(offset)
+        if owner_id is not None:
+            stmt = stmt.where(JobRow.user_id == owner_id)
         if status is not None:
             stmt = stmt.where(JobRow.status == status.value)
         with self._sessions() as session:
             return [_to_domain(row) for row in session.scalars(stmt)]
+
+    def delete(self, job_id: UUID) -> bool:
+        # A job the worker is processing stays: the worker would write its result back.
+        with self._sessions.begin() as session:
+            result = session.execute(
+                delete(JobRow).where(
+                    JobRow.id == job_id, JobRow.status != JobStatus.PROCESSING.value
+                )
+            )
+            return result.rowcount == 1
 
     def claim(self, job_id: UUID) -> Job | None:
         with self._sessions.begin() as session:

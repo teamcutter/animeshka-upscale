@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,7 +8,9 @@ from PIL import Image
 
 from src.app import create_app
 from src.core.config import UpscaleSettings
-from tests.conftest import SettingsFactory, make_png
+from src.infrastructure.db.engine import create_session_factory
+from src.infrastructure.storage.sql import SqlJobRepository
+from tests.conftest import SettingsFactory, make_png, register
 
 
 def upload(client: TestClient, png: bytes | None = None, **data: str) -> dict:
@@ -137,6 +140,7 @@ def test_realesrgan_without_weights_disables_modes(
     settings = make_settings()
     settings.upscale = UpscaleSettings(backend="realesrgan", model_path=tmp_path / "no-weights")
     with TestClient(create_app(settings)) as client:
+        register(client)
         health = client.get("/health").json()
         assert health["backend"] == "realesrgan"
         assert health["modes"] == {"2k": False, "4k": False}
@@ -154,9 +158,12 @@ def test_realesrgan_without_weights_disables_modes(
 def test_jobs_survive_restart(make_settings: SettingsFactory) -> None:
     settings = make_settings()
     with TestClient(create_app(settings)) as first:
+        register(first)
         job_id = upload(first)["id"]
+        cookies = dict(first.cookies)
 
-    with TestClient(create_app(settings)) as second:
+    # The login survives the restart too: sessions live in the database.
+    with TestClient(create_app(settings), cookies=cookies) as second:
         job = second.get(f"/api/jobs/{job_id}").json()
         assert job["status"] == "done"
         assert second.get(job["result_url"]).status_code == 200
@@ -166,6 +173,31 @@ def test_metrics_exposed(client: TestClient) -> None:
     client.get("/health")
     response = client.get("/api/metrics")
     assert response.status_code == 200
+
+
+def test_delete_job_removes_files(client: TestClient, tmp_path: Path) -> None:
+    job_id = upload(client)["id"]
+    stored = list((tmp_path / "data").rglob(f"{job_id}.*"))
+    assert len(stored) == 2  # input + output
+
+    assert client.delete(f"/api/jobs/{job_id}").status_code == 204
+    assert client.get(f"/api/jobs/{job_id}").status_code == 404
+    assert not any(path.exists() for path in stored)
+    assert client.delete(f"/api/jobs/{job_id}").status_code == 404
+
+
+def test_delete_refuses_job_in_progress(make_settings: SettingsFactory) -> None:
+    with TestClient(create_app(make_settings(embedded=False))) as client:
+        register(client)
+        job_id = upload(client)["id"]
+        # Simulate a worker that has just taken the job.
+        container = client.app.state.container
+        repo = SqlJobRepository(create_session_factory(container.engine))
+        assert repo.claim(UUID(job_id)) is not None
+
+        response = client.delete(f"/api/jobs/{job_id}")
+        assert response.status_code == 409
+        assert client.get(f"/api/jobs/{job_id}").json()["status"] == "processing"
 
 
 def test_business_metrics_exposed(client: TestClient) -> None:

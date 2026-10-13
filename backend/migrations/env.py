@@ -19,14 +19,26 @@ def _url() -> str:
 
 
 def _configure(connection: Connection) -> None:
-    context.configure(
-        connection=connection,
-        target_metadata=target_metadata,
-        # SQLite can't ALTER most things in place; batch mode recreates the table.
-        render_as_batch=connection.dialect.name == "sqlite",
-    )
-    with context.begin_transaction():
-        context.run_migrations()
+    sqlite = connection.dialect.name == "sqlite"
+    if sqlite:
+        # Batch mode re-creates a table (copy, DROP, rename). With foreign keys on, that DROP
+        # would cascade-delete the child rows (files, metrics), so they are off while migrating.
+        # The pragma only works outside a transaction, hence the commit.
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+    try:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            # SQLite can't ALTER most things in place; batch mode recreates the table.
+            render_as_batch=sqlite,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        if sqlite:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.commit()
 
 
 def run_migrations_offline() -> None:
@@ -49,7 +61,7 @@ def run_migrations_online() -> None:
 
     engine = create_db_engine(_url())
     try:
-        with engine.begin() as connection:
+        with engine.connect() as connection:
             _configure(connection)
     finally:
         engine.dispose()
