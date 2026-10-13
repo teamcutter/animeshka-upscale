@@ -30,7 +30,8 @@ Client ─────▶ │ FastAPI REST API                │ ───▶ P
               │  2K ○──── 4K ●     │    │ LR → QoP/MOS     │
               └──────────┬──────────┘    └────────┬─────────┘
                          │                       │
-                    enhanced media          Grafana ──▶ Frontend (before/after + dashboard embed)
+                    enhanced media   Prometheus ◀─ API + worker ──▶ Grafana ──▶ Frontend
+                                     (scrape)                        (dashboard embed)
 ```
 
 * **No training from scratch** — pretrained weights reused as-is; second-order degradation robustness (blur → resize → noise → JPEG ×2 + sinc ringing) from Real-ESRGAN (Wang et al., 2021) is leveraged.
@@ -75,7 +76,7 @@ class UpscalerConfig:
 | `fastapi` 0.128 + `uvicorn` 0.40 | — | REST API |
 | `pydantic-settings` 2.13 | — | `Settings` + YAML source |
 | `pyyaml` 6.0 | — | `config.yml` |
-| `prometheus-fastapi-instrumentator` 7.0 | — | metrics |
+| `prometheus-fastapi-instrumentator` 7.0 + `prometheus-client` | — | HTTP + business metrics |
 | `httpx`, `python-multipart` | — | API |
 | `sqlalchemy` 2.0 + `alembic` 1.14 | — | ORM + migrations |
 | `psycopg` 3 | — | PostgreSQL driver |
@@ -102,6 +103,7 @@ animeshka-upscale/
 │   │   │   ├── db/                 # SQLAlchemy engine, models, migrate
 │   │   │   └── storage/            # SqlJobRepository, local files
 │   │   └── shared/
+│   │       └── metrics.py          # Prometheus business metrics (jobs, sizes, speed)
 │   ├── tests/
 │   ├── migrations/                 # Alembic (alembic.ini)
 │   ├── weights/upscale_model/      # RealESRGAN_x2plus.pth (2K), RealESRGAN_x4plus.pth (4K)
@@ -114,8 +116,9 @@ animeshka-upscale/
 │   ├── nginx.conf                  # serves the SPA, proxies /api -> api:8000
 │   ├── package.json
 │   └── Dockerfile                  # node build -> nginx
-├── deploy/grafana/                 # Grafana datasource provisioning
-├── docker-compose.yml              # postgres, migrate, api, worker, frontend, grafana
+├── deploy/grafana/                 # Grafana datasource + dashboard provisioning
+├── deploy/prometheus/              # Prometheus scrape config (API + worker)
+├── docker-compose.yml              # postgres, migrate, api, worker, frontend, prometheus, grafana
 ├── docker-compose.gpu.yml          # override: NVIDIA GPU for the worker
 └── Research_Memo_Sprint1_GOST.docx
 ```
@@ -160,7 +163,7 @@ curl -L -o backend/weights/upscale_model/RealESRGAN_x4plus.pth \
 Full stack (PostgreSQL + migrations + API + worker + frontend + Grafana):
 
 ```bash
-docker compose up --build     # UI :8080, API :8000, Grafana :3000 (admin/admin), PostgreSQL :5432
+docker compose up --build     # UI :8080, API :8000, Grafana :3000 (admin/admin), Prometheus :9090, PostgreSQL :5432
 docker compose up -d postgres # only the database, run backend/frontend locally
 # worker on an NVIDIA GPU (nvidia-container-toolkit):
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
@@ -216,6 +219,9 @@ database:
 worker:
   embedded: true     # true: API runs jobs itself; false: run `python -m src.worker`
   poll_interval: 1.0
+metrics:
+  enabled: true      # API serves /api/metrics; the worker binds worker_port for Prometheus
+  worker_port: 9101
 log:
   level: INFO
 ```
@@ -271,12 +277,10 @@ can run in parallel.
 
 ### Database
 
-Tables (`migrations/versions/`): `users` (email, name, scrypt password hash), `sessions`
-(logins: SHA-256 of the cookie token, expiry), `jobs` (owner `user_id`, status, mode, kind,
-timestamps), `files` (input/output path, size, resolution), `metrics` (`job_id`, `name`, `value`,
-see [Analytics](#analytics--dashboard)). Grafana reads them through the provisioned PostgreSQL
-datasource. Jobs created before migration `0002` have `user_id = NULL` and are not shown to
-anyone.
+Tables (`migrations/versions/`): `jobs` (status, mode, kind, timestamps), `files` (input/output
+path, size, resolution), `metrics` (`job_id`, `name`, `value` — e.g. `processing_seconds`,
+`output_megapixels`, `megapixels_per_second`, `input_size_bytes`; analytics adds PSNR/SSIM/QoP
+here). Grafana reads them through the provisioned PostgreSQL datasource.
 
 ```bash
 uv run alembic upgrade head
@@ -376,8 +380,29 @@ GROUP BY j.id, j.user_id, j.mode, j.created_at, fi.width, fi.height, fo.width, f
 
 * **Objective**: PSNR, SSIM (scikit-image / pyiqa), VMAF (`libvmaf` if available) before/after
 * **Subjective**: linear regression on 32 metric features → QoP/MOS 1–5 (sprint 1 model from Maksim)
-* **Grafana**: data source = PostgreSQL / Prometheus; panels — before/after, metric tables, QoP gauge, degradation-vs-quality line, 2K vs 4K latency/FLOPs bar
+* **Grafana**: PostgreSQL (per-job metrics) + Prometheus (time series); panels — before/after, metric tables, QoP gauge, degradation-vs-quality line, 2K vs 4K latency/throughput bar
 * Test dataset (Banum): vintage anime stills — natural degradation, no synthetic blur
+
+### Metrics & observability
+
+Every finished job is measured in two places:
+
+* **Prometheus** (time series, scraped via `deploy/prometheus/prometheus.yml`):
+  * `upscale_jobs_total{kind,mode,status}` — jobs by media kind, 2K/4K mode and result
+  * `upscale_jobs_in_progress{kind}` — jobs being processed right now
+  * `upscale_job_duration_seconds{kind,mode}` — processing-time histogram (photos and videos)
+  * `upscale_input_bytes{kind}` / `upscale_output_bytes{kind}` — file sizes
+  * `upscale_input_megapixels{kind}` / `upscale_output_megapixels{kind}` — resolution size
+  * `upscale_megapixels_per_second{kind,mode}` — throughput (speed)
+  * `http_*` — request latency/rate from `prometheus-fastapi-instrumentator`
+* **PostgreSQL** `metrics` table (`job_id`, `name`, `value`): the same numbers per job —
+  `processing_seconds`, `input_megapixels`, `output_megapixels`, `megapixels_per_second`,
+  `input_size_bytes`, `output_size_bytes`.
+
+Endpoints: API `http://localhost:8000/api/metrics`, worker `http://localhost:9101/metrics`,
+Prometheus `http://localhost:9090`, Grafana `http://localhost:3000`. Provisioned dashboards
+(`deploy/grafana/provisioning/dashboards/`, folder *Animeshka*):
+**Animeshka — Pipeline metrics (Prometheus)** and **Animeshka — Jobs & media sizes (PostgreSQL)**.
 
 ## Team (Sprint 1, 01.09–14.09.2026)
 

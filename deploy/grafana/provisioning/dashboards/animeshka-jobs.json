@@ -1,0 +1,109 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Jobs done",
+      "description": "Completed jobs in the selected time range",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT count(*) AS \"done jobs\" FROM jobs WHERE status = 'done' AND $__timeFilter(created_at)" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Processing time per job (s)",
+      "description": "metrics.processing_seconds",
+      "gridPos": { "h": 12, "w": 18, "x": 6, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 0, "lineWidth": 2, "showPoints": "always", "pointSize": 4 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "time_series", "editorMode": "code", "rawSql": "SELECT j.created_at AS \"time\", m.value AS \"seconds\", j.kind || ' ' || j.mode AS metric FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE m.name = 'processing_seconds' AND $__timeFilter(j.created_at) ORDER BY j.created_at" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "bargauge",
+      "title": "Avg processing time by mode (s)",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 6 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"avg seconds\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE m.name = 'processing_seconds' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "bargauge",
+      "title": "Avg throughput by mode (megapixels / s)",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 6 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"megapixels / s\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE m.name = 'megapixels_per_second' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Avg output size by mode (megapixels)",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 6 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"output megapixels\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE m.name = 'output_megapixels' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Per-job metrics",
+      "description": "Everything recorded for each job: timing, throughput and media sizes",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 13 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "input_bytes" }, "properties": [ { "id": "unit", "value": "bytes" } ] },
+          { "matcher": { "id": "byName", "options": "output_bytes" }, "properties": [ { "id": "unit", "value": "bytes" } ] },
+          { "matcher": { "id": "byName", "options": "seconds" }, "properties": [ { "id": "unit", "value": "s" } ] }
+        ]
+      },
+      "options": { "showHeader": true, "sortBy": [ { "displayName": "time", "desc": true } ] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "SELECT j.created_at AS \"time\", j.kind AS \"kind\", j.mode AS \"mode\", j.status AS \"status\", j.original_filename AS \"file\", max(m.value) FILTER (WHERE m.name = 'processing_seconds') AS \"seconds\", max(m.value) FILTER (WHERE m.name = 'input_megapixels') AS \"input_mp\", max(m.value) FILTER (WHERE m.name = 'output_megapixels') AS \"output_mp\", max(m.value) FILTER (WHERE m.name = 'megapixels_per_second') AS \"mp_per_s\", max(m.value) FILTER (WHERE m.name = 'input_size_bytes') AS \"input_bytes\", max(m.value) FILTER (WHERE m.name = 'output_size_bytes') AS \"output_bytes\" FROM jobs j LEFT JOIN metrics m ON m.job_id = j.id WHERE $__timeFilter(j.created_at) GROUP BY j.id, j.created_at, j.kind, j.mode, j.status, j.original_filename ORDER BY j.created_at DESC"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["animeshka", "postgres"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Animeshka — Jobs & media sizes (PostgreSQL)",
+  "uid": "animeshka-jobs",
+  "version": 1,
+  "weekStart": ""
+}

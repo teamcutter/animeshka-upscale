@@ -1,0 +1,127 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Jobs processed / s by status",
+      "description": "upscale_jobs_total broken down by final status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (status) (rate(upscale_jobs_total[5m]))", "legendFormat": "{{status}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Processing time p50 / p95 by mode",
+      "description": "upscale_job_duration_seconds quantiles",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 0, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.5, sum by (le, mode) (rate(upscale_job_duration_seconds_bucket[10m])))", "legendFormat": "p50 {{mode}}" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le, mode) (rate(upscale_job_duration_seconds_bucket[10m])))", "legendFormat": "p95 {{mode}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Throughput (megapixels / s, p50) by mode",
+      "description": "upscale_megapixels_per_second — how fast the model produces output pixels",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "none", "custom": { "fillOpacity": 0, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.5, sum by (le, mode) (rate(upscale_megapixels_per_second_bucket[10m])))", "legendFormat": "{{mode}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Jobs in progress",
+      "description": "upscale_jobs_in_progress",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "none", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value" },
+      "targets": [
+        { "refId": "A", "expr": "sum(upscale_jobs_in_progress)", "legendFormat": "in progress" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Jobs total by mode",
+      "description": "upscale_jobs_total",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (mode) (upscale_jobs_total)", "legendFormat": "{{mode}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Avg input / output file size by kind (MB)",
+      "description": "upscale_input_bytes / upscale_output_bytes averages",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "custom": { "fillOpacity": 0, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (kind) (rate(upscale_input_bytes_sum[10m])) / sum by (kind) (rate(upscale_input_bytes_count[10m])) / 1048576", "legendFormat": "in {{kind}}" },
+        { "refId": "B", "expr": "sum by (kind) (rate(upscale_output_bytes_sum[10m])) / sum by (kind) (rate(upscale_output_bytes_count[10m])) / 1048576", "legendFormat": "out {{kind}}" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Avg output size by kind (megapixels)",
+      "description": "upscale_output_megapixels average",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "none", "custom": { "fillOpacity": 0, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (kind) (rate(upscale_output_megapixels_sum[10m])) / sum by (kind) (rate(upscale_output_megapixels_count[10m]))", "legendFormat": "{{kind}}" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "HTTP request duration p95",
+      "description": "prometheus-fastapi-instrumentator latency",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "animeshka-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 0, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["animeshka", "prometheus"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Animeshka — Pipeline metrics (Prometheus)",
+  "uid": "animeshka-prometheus",
+  "version": 1,
+  "weekStart": ""
+}

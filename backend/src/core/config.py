@@ -60,6 +60,12 @@ class WorkerSettings(BaseModel):
     poll_interval: float = Field(default=1.0, gt=0)
 
 
+class MetricsSettings(BaseModel):
+    # The API serves /api/metrics; the worker (no HTTP server) binds worker_port for Prometheus.
+    enabled: bool = True
+    worker_port: int = Field(default=9101, ge=1, le=65535)
+
+
 class AuthSettings(BaseModel):
     session_days: int = Field(default=30, ge=1)
     # True behind HTTPS: the browser then sends the session cookie only over TLS.
@@ -89,6 +95,7 @@ class Settings(BaseSettings):
     storage: StorageSettings = Field(default_factory=StorageSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
+    metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     log: LogSettings = Field(default_factory=LogSettings)
 

@@ -21,6 +21,9 @@ database:
 worker:
   embedded: true     # false -> run `python -m src.worker`
   poll_interval: 1.0
+metrics:
+  enabled: true      # API serves /api/metrics; the worker binds worker_port for Prometheus
+  worker_port: 9101
 auth:
   session_days: 30
   cookie_secure: false   # true behind HTTPS

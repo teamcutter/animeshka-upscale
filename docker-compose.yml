@@ -1,4 +1,4 @@
-# docker compose up --build        -> UI :8080, API :8000, Grafana :3000, PostgreSQL :5432
+# docker compose up --build        -> UI :8080, API :8000, Grafana :3000, Prometheus :9090, PostgreSQL :5432
 # docker compose up -d postgres    -> only the database, run backend/frontend locally
 # GPU: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 name: animeshka
@@ -67,6 +67,8 @@ services:
     <<: *backend
     command: ["python", "-m", "src.worker"]
     restart: unless-stopped
+    expose:
+      - "9101"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -82,6 +84,19 @@ services:
       api:
         condition: service_healthy
 
+  # Scrapes the API and the worker; Grafana reads business + HTTP metrics from it.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus:/prometheus
+    restart: unless-stopped
+    depends_on:
+      - api
+      - worker
+
   grafana:
     image: grafana/grafana:11.3.0
     ports:
@@ -95,7 +110,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      prometheus:
+        condition: service_started
 
 volumes:
   pgdata:
   grafana:
+  prometheus:
