@@ -32,10 +32,45 @@ export interface Health {
   database: 'ok' | 'unavailable';
   backend: 'stub' | 'realesrgan';
   worker: 'embedded' | 'external';
+  auth: 'required' | 'open';
   modes: Record<Mode, boolean>;
 }
 
-const http = axios.create({ baseURL: '/' });
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+}
+
+// The session is an HttpOnly cookie set by the server; the browser sends it on its own.
+const http = axios.create({ baseURL: '/', withCredentials: true });
+
+export async function getMe(signal?: AbortSignal): Promise<User> {
+  const { data } = await http.get<User>('/api/auth/me', { signal });
+  return data;
+}
+
+export async function login(email: string, password: string): Promise<User> {
+  const { data } = await http.post<User>('/api/auth/login', { email, password });
+  return data;
+}
+
+export async function register(email: string, password: string, name: string): Promise<User> {
+  const { data } = await http.post<User>('/api/auth/register', { email, password, name });
+  return data;
+}
+
+export async function logout(): Promise<void> {
+  await http.post('/api/auth/logout');
+}
+
+export async function deleteJob(id: string): Promise<void> {
+  await http.delete(`/api/jobs/${id}`);
+}
+
+/** The shared account anonymous requests run as when the server has AUTH__REQUIRED=false. */
+export const GUEST_EMAIL = 'guest@animeshka.local';
 
 export async function getHealth(signal?: AbortSignal): Promise<Health> {
   // 503 = database down; the body still describes the server, so accept it.
@@ -135,6 +170,7 @@ export function errorMessage(error: unknown): string {
         .map((item: { msg?: string }) => item.msg ?? JSON.stringify(item))
         .join('; ');
     }
+    if (error.response?.status === 401) return 'Нужно войти в аккаунт';
     if (error.response) return `Сервер ответил ${error.response.status}`;
     return 'Сервер недоступен';
   }

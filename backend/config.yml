@@ -25,6 +25,7 @@ metrics:
   enabled: true      # API serves /api/metrics; the worker binds worker_port for Prometheus
   worker_port: 9101
 auth:
+  required: true     # false -> no login needed, requests run as a shared guest (local/dev only)
   session_days: 30
   cookie_secure: false   # true behind HTTPS
 log:

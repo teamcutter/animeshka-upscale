@@ -42,7 +42,9 @@ def database_url(tmp_path: Path) -> str:
 @pytest.fixture
 def make_settings(tmp_path: Path, database_url: str) -> SettingsFactory:
     def factory(*, embedded: bool = True) -> Settings:
+        # _env_file=None: the developer's backend/.env (e.g. AUTH__REQUIRED=false) must not leak in.
         return Settings(
+            _env_file=None,  # ty: ignore[unknown-argument]  (pydantic-settings kwarg)
             upscale=UpscaleSettings(backend="stub"),
             storage=StorageSettings(dir=tmp_path / "data"),
             image=ImageSettings(max_size_mb=1, max_width=256, max_height=256),

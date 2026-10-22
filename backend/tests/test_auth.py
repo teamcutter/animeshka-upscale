@@ -4,13 +4,16 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
+from src.app import create_app
+from src.core.config import AuthSettings
 from src.features.auth.api.deps import SESSION_COOKIE
 from src.features.auth.domain import Session
 from src.features.auth.security import hash_password, hash_token, verify_password
+from src.features.auth.service import GUEST_EMAIL
 from src.features.upscale.domain import now_utc
 from src.infrastructure.db.engine import create_session_factory
 from src.infrastructure.storage.users import SqlUserRepository
-from tests.conftest import make_png, register
+from tests.conftest import SettingsFactory, make_png, register
 
 
 def login(client: TestClient, email: str = "anime@example.com", password: str = "secret-pass"):
@@ -142,3 +145,32 @@ def test_users_see_only_their_own_jobs(client: TestClient) -> None:
     assert login(client).status_code == 200
     assert [job["id"] for job in client.get("/api/jobs").json()] == [job_id]
     assert client.get(f"/api/jobs/{job_id}/result").status_code == 200
+
+
+def test_auth_not_required_runs_as_guest(make_settings: SettingsFactory) -> None:
+    settings = make_settings()
+    settings.auth = AuthSettings(required=False)
+    with TestClient(create_app(settings)) as anonymous:
+        assert anonymous.get("/health").json()["auth"] == "open"
+
+        # No cookie at all: everything works as the guest.
+        me = anonymous.get("/api/auth/me")
+        assert me.status_code == 200
+        assert me.json()["email"] == GUEST_EMAIL
+        job_id = upload(anonymous)
+        assert [job["id"] for job in anonymous.get("/api/jobs").json()] == [job_id]
+        assert anonymous.get(f"/api/jobs/{job_id}/result").status_code == 200
+
+        # A stale cookie does not block anonymous access either.
+        anonymous.cookies.set(SESSION_COOKIE, "expired-or-garbage")
+        assert anonymous.get("/api/auth/me").json()["email"] == GUEST_EMAIL
+        anonymous.cookies.clear()
+
+        # Real logins still work and keep their own history.
+        register(anonymous, email="real@example.com")
+        assert anonymous.get("/api/auth/me").json()["email"] == "real@example.com"
+        assert anonymous.get("/api/jobs").json() == []
+        assert anonymous.get(f"/api/jobs/{job_id}").status_code == 404
+
+        # The guest cannot be logged into.
+        assert login(anonymous, email=GUEST_EMAIL, password="").status_code in (401, 422)

@@ -5,30 +5,23 @@ const BACKEND_LABEL: Record<Health['backend'], string> = {
   stub: 'Stub (Lanczos)',
 };
 
-export default function ServerStatus({
-  health,
-  unreachable,
-}: {
-  health: Health | null;
-  unreachable: boolean;
-}) {
+export default function ServerStatus({ health, unreachable }: { health: Health | null; unreachable: boolean }) {
   const down = unreachable || health?.status === 'degraded';
-  const color = down ? 'bg-rose-500' : health ? 'bg-emerald-500' : 'bg-slate-300';
-  const text = unreachable
-    ? 'API недоступен'
-    : !health
-      ? 'Подключение…'
-      : health.status === 'degraded'
-        ? `${BACKEND_LABEL[health.backend]} · БД недоступна`
-        : `${BACKEND_LABEL[health.backend]} · ${
-            Object.entries(health.modes)
-              .filter(([, ok]) => ok)
-              .map(([mode]) => mode)
-              .join(', ') || 'нет моделей'
-          }`;
+  const color = down ? 'bg-red-500' : health ? 'bg-emerald-500' : 'bg-stone-300';
+  let text: string;
+  if (unreachable) text = 'API недоступен';
+  else if (!health) text = 'Подключение…';
+  else if (health.status === 'degraded') text = `${BACKEND_LABEL[health.backend]} · БД недоступна`;
+  else {
+    const modes = Object.entries(health.modes)
+      .filter(([, ok]) => ok)
+      .map(([mode]) => mode)
+      .join(', ');
+    text = `${BACKEND_LABEL[health.backend]} · ${modes || 'нет моделей'}${health.auth === 'open' ? ' · вход отключён' : ''}`;
+  }
 
   return (
-    <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-500" title="Состояние сервера">
+    <div className="hidden sm:flex items-center space-x-2 text-xs text-orange-900/70" title="Состояние сервера">
       <span className={`w-2 h-2 rounded-full ${color}`} />
       <span>{text}</span>
     </div>

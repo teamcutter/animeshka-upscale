@@ -24,9 +24,16 @@ AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 def current_user(
     auth: AuthServiceDep, token: Annotated[str | None, Depends(session_cookie)]
 ) -> User:
-    if not token:
+    if token:
+        try:
+            return auth.authenticate(token)
+        except UnauthorizedError:
+            if auth.required:
+                raise
+            # Stale cookie with auth disabled: fall through to the guest.
+    if auth.required:
         raise UnauthorizedError("Not authenticated")
-    return auth.authenticate(token)
+    return auth.guest()
 
 
 CurrentUser = Annotated[User, Depends(current_user)]

@@ -10,6 +10,7 @@ from PIL import Image, UnidentifiedImageError
 from src.core.config import ImageSettings, VideoSettings
 from src.features.upscale.domain import FileRole, Job, JobStatus, MediaFile, MediaKind, Mode
 from src.features.upscale.ports import FileStorage, JobRepository, Upscaler
+from src.features.upscale.quality import quality_metrics
 from src.shared import metrics
 from src.shared.errors import (
     InvalidMediaError,
@@ -229,6 +230,12 @@ class UpscaleService:
             job.metrics["input_megapixels"] = round(input_megapixels, 4)
         if elapsed > 0:
             job.metrics["megapixels_per_second"] = round(output_megapixels / elapsed, 4)
+        # psnr_db / ssim / sharpness_* (lost in the merge of #13 and #14, see quality.py).
+        try:
+            job.metrics.update(quality_metrics(source, result))
+        except Exception:
+            # Analytics must never fail an otherwise good upscale.
+            logger.exception("Quality metrics failed for job %s", job.id)
 
     def _create_job(
         self,

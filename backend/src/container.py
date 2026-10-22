@@ -68,6 +68,8 @@ class Container:
     def startup(self, *, load_models: bool = True) -> None:
         if self.settings.database.auto_migrate:
             upgrade_database(self.engine)
+        if not self.settings.auth.required:
+            self.auth_service.guest()
         if load_models:
             for mode, upscaler in self.upscalers.items():
                 # A missing weight file disables that mode instead of taking the service down.
