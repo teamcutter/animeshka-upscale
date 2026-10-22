@@ -1,8 +1,35 @@
 @import "tailwindcss";
 
 body {
-  background-color: #F8FAFC; /* Мягкий светлый фон (slate-50) */
-  color: #1E293B; /* Темно-серый текст для хорошей читаемости */
+  
+  background-image: url('/bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  color: #44403C;
   font-family: 'Inter', system-ui, sans-serif;
   margin: 0;
+  overflow-x: hidden;
+}
+
+.bg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(40, 20, 10, 0.3); 
+  backdrop-filter: blur(4px);
+  z-index: -1;
+}
+
+@keyframes fall {
+  0% { transform: translateY(-10vh) rotate(0deg) translateX(0); opacity: 0; }
+  15% { opacity: 0.75; }
+  85% { opacity: 0.75; }
+  100% { transform: translateY(110vh) rotate(360deg) translateX(40px); opacity: 0; }
+}
+
+.leaf {
+  position: fixed;
+  top: -10%;
+  pointer-events: none;
+  animation: fall 16s linear infinite;
 }
