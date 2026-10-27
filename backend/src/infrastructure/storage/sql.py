@@ -32,7 +32,7 @@ def _to_file(row: FileRow) -> MediaFile:
     )
 
 
-def _to_domain(row: JobRow) -> Job:
+def job_from_row(row: JobRow) -> Job:
     files = {FileRole(f.role): _to_file(f) for f in row.files}
     return Job(
         id=row.id,
@@ -46,6 +46,7 @@ def _to_domain(row: JobRow) -> Job:
         output=files.get(FileRole.OUTPUT),
         error=row.error,
         metrics={m.name: m.value for m in row.metrics},
+        published_at=aware_utc(row.post.published_at) if row.post else None,
         created_at=aware_utc(row.created_at),
         updated_at=aware_utc(row.updated_at),
     )
@@ -103,7 +104,7 @@ class SqlJobRepository:
     def get(self, job_id: UUID) -> Job | None:
         with self._sessions() as session:
             row = session.get(JobRow, job_id)
-            return _to_domain(row) if row else None
+            return job_from_row(row) if row else None
 
     def update(self, job: Job) -> None:
         with self._sessions.begin() as session:
@@ -126,7 +127,7 @@ class SqlJobRepository:
         if status is not None:
             stmt = stmt.where(JobRow.status == status.value)
         with self._sessions() as session:
-            return [_to_domain(row) for row in session.scalars(stmt)]
+            return [job_from_row(row) for row in session.scalars(stmt)]
 
     def delete(self, job_id: UUID) -> bool:
         # A job the worker is processing stays: the worker would write its result back.
@@ -166,4 +167,4 @@ class SqlJobRepository:
         if result.rowcount != 1:
             return None
         row = session.get(JobRow, job_id, populate_existing=True)
-        return _to_domain(row) if row else None
+        return job_from_row(row) if row else None

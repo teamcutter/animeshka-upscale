@@ -29,6 +29,8 @@ class JobResponse(BaseModel):
     metrics: dict[str, float]
     result_url: str | None
     error: str | None
+    published: bool
+    published_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -47,6 +49,8 @@ class JobResponse(BaseModel):
             metrics=job.metrics,
             result_url=f"/api/jobs/{job.id}/result" if done else None,
             error=job.error,
+            published=job.published_at is not None,
+            published_at=job.published_at,
             created_at=job.created_at,
             updated_at=job.updated_at,
         )
