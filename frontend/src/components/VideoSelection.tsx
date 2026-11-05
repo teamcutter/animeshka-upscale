@@ -3,7 +3,7 @@ import { Loader2, Play } from 'lucide-react';
 import { errorMessage, isAbort, previewVideo } from '../api';
 import { videoTime } from '../hooks';
 
-const INPUT = 'w-full rounded-xl border border-orange-200 bg-white/80 p-2.5 text-stone-800';
+const INPUT = 'w-full rounded-none border border-zinc-800 bg-zinc-950 p-3 text-white font-mono text-sm focus:border-orange-500 focus:outline-none';
 
 interface Props {
   file: File;
@@ -73,16 +73,17 @@ export default function VideoSelection({ file, sourceUrl, previewUrl, onPreview,
   };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="font-bold text-stone-800 truncate" title={file.name}>{file.name}</h3>
-        <p className="text-sm text-stone-600 mt-1">Выберите отрезок перед обработкой. По умолчанию — первые 10 секунд.</p>
+    <div className="max-w-4xl mx-auto space-y-6 border border-zinc-800 bg-zinc-900 p-8">
+      <div className="border-l-4 border-orange-500 pl-4 py-1">
+        <h3 className="font-black text-white text-xl truncate uppercase" title={file.name}>{file.name}</h3>
+        <p className="text-xs font-mono text-zinc-500 mt-1 uppercase">VIDEO_TRIMMER // ВЫБЕРИТЕ ОТРЕЗОК ДЛЯ ОБРАБОТКИ (ПО УМОЛЧАНИЮ — 10 СЕКУНД)</p>
       </div>
-      <div className="rounded-2xl overflow-hidden bg-stone-900 aspect-video relative">
+
+      <div className="rounded-none overflow-hidden bg-zinc-950 border border-zinc-800 aspect-video relative">
         <video
           ref={player}
           src={needsConversion ? previewUrl ?? undefined : sourceUrl}
-          controls playsInline preload="metadata" className="h-full w-full"
+          controls playsInline preload="metadata" className="h-full w-full object-contain"
           aria-label="Предпросмотр выбранного видео"
           onLoadedMetadata={(event) => {
             if (needsConversion) return;
@@ -111,40 +112,49 @@ export default function VideoSelection({ file, sourceUrl, previewUrl, onPreview,
           }}
         />
         {loading && (
-          <div className="absolute inset-0 bg-black/70 text-white flex flex-col items-center justify-center gap-3">
-            <Loader2 className="animate-spin" />
-            <p className="text-sm px-4 text-center">Готовим совместимый предпросмотр…</p>
+          <div className="absolute inset-0 bg-black/80 text-white flex flex-col items-center justify-center gap-3 font-mono">
+            <Loader2 className="animate-spin text-orange-500" />
+            <p className="text-xs uppercase tracking-wider">Готовим совместимый предпросмотр...</p>
           </div>
         )}
       </div>
+
       {needsConversion && (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs font-mono text-zinc-400 border-l-2 border-orange-500 pl-3">
           Для этого формата создаётся MP4-предпросмотр до 30 секунд без улучшения.
-          {previewUrl && ` Сейчас: ${videoTime(previewStart)}–${videoTime(previewStart + previewLength)}.`}
+          {previewUrl && ` Текущий: ${videoTime(previewStart)}–${videoTime(previewStart + previewLength)}.`}
           {' '}После изменения границ нажмите «Предпросмотр отрезка».
         </p>
       )}
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      <div className="grid grid-cols-2 gap-4">
-        <label className="text-sm text-stone-700 space-y-2">
-          <span className="block">Начало, секунды</span>
+
+      {error && <p role="alert" className="text-xs font-mono text-red-500 border border-red-500/50 bg-red-500/10 p-3">[ERROR]: {error}</p>}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+        <label className="text-xs font-mono text-zinc-400 space-y-2 uppercase">
+          <span className="block text-zinc-300">Начало (секунды)</span>
           <input type="number" min={0} max={duration ?? undefined} step="0.1" value={Number.isFinite(start) ? start : ''} onChange={(e) => setStart(e.target.valueAsNumber)} className={INPUT} />
-          {duration !== null && <input aria-label="Начало отрезка" type="range" min={0} max={duration} step="0.1" value={Number.isFinite(start) ? start : 0} onChange={(e) => setStart(Number(e.target.value))} className="w-full accent-orange-500" />}
+          {duration !== null && <input aria-label="Начало отрезка" type="range" min={0} max={duration} step="0.1" value={Number.isFinite(start) ? start : 0} onChange={(e) => setStart(Number(e.target.value))} className="w-full accent-orange-500 bg-zinc-950 cursor-pointer" />}
         </label>
-        <label className="text-sm text-stone-700 space-y-2">
-          <span className="block">Конец, секунды</span>
+        <label className="text-xs font-mono text-zinc-400 space-y-2 uppercase">
+          <span className="block text-zinc-300">Конец (секунды)</span>
           <input type="number" min={0} max={duration ?? undefined} step="0.1" value={Number.isFinite(end) ? end : ''} onChange={(e) => setEnd(e.target.valueAsNumber)} className={INPUT} />
-          {duration !== null && <input aria-label="Конец отрезка" type="range" min={0} max={duration} step="0.1" value={Number.isFinite(end) ? end : 0} onChange={(e) => setEnd(Number(e.target.value))} className="w-full accent-orange-500" />}
+          {duration !== null && <input aria-label="Конец отрезка" type="range" min={0} max={duration} step="0.1" value={Number.isFinite(end) ? end : 0} onChange={(e) => setEnd(Number(e.target.value))} className="w-full accent-orange-500 bg-zinc-950 cursor-pointer" />}
         </label>
       </div>
-      <div className="flex flex-wrap gap-3 items-center text-sm">
-        <span className="text-stone-600">{valid ? `Выбрано ${(end - start).toFixed(1)} с` : 'Конец должен быть после начала и в пределах видео.'}{duration !== null && ` · Всего ${videoTime(duration)}`}</span>
-        {duration !== null && <button onClick={() => { setStart(0); setEnd(duration); }} className="text-orange-700 underline">Всё видео</button>}
-        <button disabled={!valid || loading} onClick={previewSelection} className="inline-flex items-center gap-1 text-orange-700 disabled:opacity-50"><Play size={15} /> Предпросмотр отрезка</button>
+
+      <div className="flex flex-wrap gap-4 items-center justify-between text-xs font-mono pt-2 border-t border-zinc-800">
+        <span className="text-zinc-400">{valid ? `Выбрано: ${(end - start).toFixed(1)} с` : 'Ошибка границ диапазона.'}{duration !== null && ` // ВСЕГО: ${videoTime(duration)}`}</span>
+        {duration !== null && <button onClick={() => { setStart(0); setEnd(duration); }} className="text-orange-500 uppercase hover:underline">Всё видео</button>}
+        <button disabled={!valid || loading} onClick={previewSelection} className="inline-flex items-center gap-1.5 text-orange-500 hover:text-white uppercase disabled:opacity-50">
+          <Play size={14} /> Предпросмотр отрезка
+        </button>
       </div>
-      <div className="flex flex-wrap justify-between gap-3">
-        <button onClick={onCancel} className="border border-orange-200 px-5 py-2.5 rounded-xl text-stone-700">Другой файл</button>
-        <button disabled={!valid || loading} onClick={() => void submitSelection()} className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl font-medium disabled:opacity-50">Улучшить выбранный отрезок</button>
+
+      <div className="flex flex-wrap justify-between gap-4 pt-4 border-t border-zinc-800">
+        <button onClick={onCancel} className="border border-zinc-800 px-6 py-3 text-zinc-400 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase transition-colors">Другой файл</button>
+        <button disabled={!valid || loading} onClick={() => void submitSelection()} className="bg-orange-500 text-black font-black uppercase tracking-widest px-8 py-3 hover:bg-orange-400 transition-transform shadow-[4px_4px_0px_#fff] active:translate-y-1 active:shadow-none disabled:opacity-50">
+          Улучшить выбранный отрезок
+        </button>
       </div>
     </div>
   );
