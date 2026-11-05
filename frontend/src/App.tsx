@@ -20,7 +20,6 @@ export default function App() {
     );
   }
 
-  
   if (!user) {
     return (
       <>
@@ -30,7 +29,6 @@ export default function App() {
     );
   }
   
-
   return (
     <div className="min-h-screen flex flex-col relative">
       <div className="bg-overlay"></div>
