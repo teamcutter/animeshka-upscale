@@ -1,140 +1,41 @@
-import { useEffect, useState } from 'react';
-import { Download, Loader2, RefreshCw, Trash2 } from 'lucide-react';
-
-import { deleteJob, downloadName, errorMessage, isAbort, listJobs, type Job, type JobStatus } from '../api';
-import { formatBytes, formatDate, videoTime } from '../hooks';
-
-const STATUS: Record<JobStatus, { label: string; className: string }> = {
-  queued: { label: 'В очереди', className: 'bg-stone-100 text-stone-600 border-stone-200' },
-  processing: { label: 'Обработка', className: 'bg-amber-100 text-amber-700 border-amber-200' },
-  done: { label: 'Готово', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  failed: { label: 'Ошибка', className: 'bg-red-100 text-red-700 border-red-200' },
-};
-
 export default function HistoryTab() {
-  const [jobs, setJobs] = useState<Job[] | null>(null);
-  const [error, setError] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const refresh = () => setRefreshKey((k) => k + 1);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    listJobs({ limit: 60 }, controller.signal)
-      .then((data) => {
-        setJobs(data);
-        setError('');
-      })
-      .catch((err: unknown) => {
-        if (!isAbort(err)) setError(errorMessage(err));
-      });
-    return () => controller.abort();
-  }, [refreshKey]);
-
-  // Jobs still running change on the server: poll while any are pending.
-  useEffect(() => {
-    if (!jobs?.some((job) => job.status === 'queued' || job.status === 'processing')) return;
-    const timer = setTimeout(refresh, 2000);
-    return () => clearTimeout(timer);
-  }, [jobs]);
-
-  const remove = async (job: Job) => {
-    try {
-      await deleteJob(job.id);
-      setJobs((current) => current?.filter((j) => j.id !== job.id) ?? null);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  };
+  const mockHistory = [
+    { id: 1, name: "my_art_final.png", status: "COMPLETED", date: "2026-11-05" },
+    { id: 2, name: "photo_old_scan.jpg", status: "COMPLETED", date: "2026-11-04" },
+    { id: 3, name: "video_render.mp4", status: "FAILED", date: "2026-11-03" },
+  ];
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="inline-block bg-white/80 backdrop-blur-md px-6 py-3 rounded-2xl shadow-lg border border-orange-200/50">
-          <h2 className="text-2xl font-bold text-stone-800">История обработок</h2>
-        </div>
-        <button
-          onClick={refresh}
-          className="flex items-center gap-2 text-sm bg-white/80 backdrop-blur-md px-4 py-2 rounded-xl border border-orange-200/50 text-stone-600 hover:text-orange-700 transition-colors"
-        >
-          <RefreshCw size={16} /> Обновить
-        </button>
+    <div className="space-y-8">
+      <div className="border-l-4 border-orange-500 pl-6 py-2">
+        <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Мои работы</h2>
+        <p className="text-zinc-500 font-mono text-sm uppercase mt-1">USER_ARCHIVE</p>
       </div>
 
-      {error && <p className="text-red-700 bg-red-100/80 border border-red-200 rounded-xl p-4 mb-6">{error}</p>}
-      {!jobs && !error && (
-        <div className="flex justify-center p-12 text-orange-500">
-          <Loader2 className="animate-spin w-8 h-8" />
-        </div>
-      )}
-      {jobs && jobs.length === 0 && (
-        <p className="text-stone-600 bg-white/80 backdrop-blur-md rounded-2xl border border-orange-200/50 p-12 text-center">
-          Пока пусто — загрузите первое изображение или видео на главной.
-        </p>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {jobs?.map((job) => (
-          <div key={job.id} className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-orange-200/50 overflow-hidden group flex flex-col">
-            <div className="h-48 bg-orange-100/30 flex items-center justify-center overflow-hidden border-b border-orange-100/50">
-              {job.result_url && job.kind === 'image' ? (
-                <img src={job.result_url} alt={job.filename} className="h-full w-full object-cover" loading="lazy" />
-              ) : job.result_url && job.kind === 'video' ? (
-                <video src={job.result_url} controls playsInline preload="metadata" aria-label={job.filename} className="h-full w-full" />
-              ) : (
-                <span className="text-stone-600 text-sm font-medium bg-white/70 backdrop-blur-sm px-4 py-2 rounded-xl shadow-sm border border-orange-100 mx-4 text-center">
-                  {job.status === 'failed' ? job.error : `${job.kind === 'video' ? 'Видео' : 'Изображение'} · ${STATUS[job.status].label}`}
-                </span>
-              )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {mockHistory.map((item) => (
+          <div key={item.id} className="border border-zinc-800 bg-zinc-900 p-5 flex flex-col sm:flex-row sm:items-center justify-between group hover:border-orange-500 transition-colors gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-500 font-mono text-xs shrink-0">
+                {item.name.endsWith('.mp4') ? 'VID' : 'IMG'}
+              </div>
+              <div className="overflow-hidden">
+                <h4 className="text-white font-bold truncate">{item.name}</h4>
+                <div className="text-zinc-500 font-mono text-xs mt-1">{item.date}</div>
+              </div>
             </div>
-            <div className="p-5 flex-1 flex flex-col">
-              <h3 className="font-bold text-stone-800 truncate" title={job.filename}>
-                {job.filename}
-              </h3>
-              <div className="flex justify-between items-center mt-2 text-sm text-stone-600">
-                <span>{formatDate(job.created_at)}</span>
-                <span className="flex gap-1">
-                  <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-lg text-xs font-bold border border-orange-200/50">{job.mode}</span>
-                  <span className={`px-2 py-1 rounded-lg text-xs font-bold border ${STATUS[job.status].className}`}>{STATUS[job.status].label}</span>
-                </span>
-              </div>
-              <div className="mt-2 text-xs text-stone-500">
-                {job.input.width}×{job.input.height}
-                {job.output && ` → ${job.output.width}×${job.output.height}`}
-                {job.metrics.processing_seconds !== undefined && ` · ${job.metrics.processing_seconds.toFixed(1)} с`}
-                {job.metrics.psnr_db !== undefined && ` · PSNR ${job.metrics.psnr_db.toFixed(1)}`}
-                {job.metrics.ssim !== undefined && ` · SSIM ${job.metrics.ssim.toFixed(3)}`}
-              </div>
-              {job.kind === 'video' && job.metrics.frame_count !== undefined && (
-                <div className="mt-1 text-xs text-stone-500">
-                  {job.metrics.frame_count.toFixed(0)} кадров
-                  {job.end_seconds != null && ` · ${videoTime(job.start_seconds ?? 0)}–${videoTime(job.end_seconds)}`}
-                  {job.metrics.fps !== undefined && ` · ${job.metrics.fps.toFixed(2)} FPS`}
-                  {job.metrics.duration_seconds !== undefined && ` · ${job.metrics.duration_seconds.toFixed(1)} с`}
-                  {job.metrics.quality_sample_count !== undefined && ` · Метрики по ${job.metrics.quality_sample_count.toFixed(0)} кадрам`}
-                </div>
-              )}
-              <div className="mt-5 pt-4 border-t border-orange-100/50 mt-auto flex gap-2">
-                {job.result_url ? (
-                  <a
-                    href={job.result_url}
-                    download={downloadName(job)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-orange-100 text-orange-700 py-2.5 rounded-xl text-sm font-bold hover:bg-orange-200 transition-colors shadow-sm"
-                  >
-                    <Download size={14} /> Скачать{job.output ? ` (${formatBytes(job.output.size_bytes)})` : ''}
-                  </a>
-                ) : (
-                  <span className="flex-1" />
-                )}
-                {job.status !== 'processing' && (
-                  <button
-                    onClick={() => void remove(job)}
-                    title="Удалить работу и её файлы"
-                    className="px-3 py-2.5 rounded-xl text-sm bg-white/60 border border-orange-200 text-stone-500 hover:text-red-600 hover:border-red-200 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
+            
+            <div className="flex items-center space-x-4 sm:ml-auto">
+              <span className={`font-mono text-xs border px-2 py-1 ${
+                item.status === 'COMPLETED' 
+                  ? 'text-green-500 border-green-500/30 bg-green-500/10' 
+                  : 'text-red-500 border-red-500/30 bg-red-500/10'
+              }`}>
+                {item.status}
+              </span>
+              <button className="text-orange-500 hover:text-white text-sm font-bold uppercase underline decoration-orange-500/50 underline-offset-4 disabled:opacity-50" disabled={item.status !== 'COMPLETED'}>
+                Скачать
+              </button>
             </div>
           </div>
         ))}

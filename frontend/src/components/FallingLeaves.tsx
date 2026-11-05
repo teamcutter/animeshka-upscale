@@ -1,32 +1,69 @@
-export default function FallingLeaves() {
-  // Единая форма резного листа
-  const starLeafPath = "M17.5,3.62A8.53,8.53,0,0,0,12,12a8.5,8.5,0,0,0-5.5-8.38c-.37-.14-.73,0-1,.22s-.36.63-.3.94A10.89,10.89,0,0,0,10.59,12h0a1,1,0,0,1,0,2,10.9,10.9,0,0,0-5.41,7.22c-.06.31,0-.68.29-.94s.62.36,1,.22A8.53,8.53,0,0,0,12,14a8.5,8.5,0,0,0,5.5,8.38c.37.14.73,0,1-.22s.36-.63.3-.94A10.89,10.89,0,0,0,13.41,14h0a1,1,0,0,1,0-2,10.9,10.9,0,0,0,5.41-7.22c.06-.31,0-.68-.29-.94S17.87,3.48,17.5,3.62Z";
+import { useEffect, useState } from 'react';
 
-  // Распределение по левой и правой частям экрана с разной задержкой
-  const leaves = [
-    { id: 1, delay: "0s", pos: { left: "10%" }, color: "text-orange-500/60" },
-    { id: 2, delay: "2s", pos: { right: "15%" }, color: "text-red-500/50" },
-    { id: 3, delay: "4s", pos: { left: "25%" }, color: "text-orange-400/60" },
-    { id: 4, delay: "6s", pos: { right: "35%" }, color: "text-yellow-600/50" },
-    { id: 5, delay: "8s", pos: { left: "65%" }, color: "text-red-400/50" },
-    { id: 6, delay: "10s", pos: { right: "75%" }, color: "text-orange-500/60" },
-    { id: 7, delay: "12s", pos: { left: "85%" }, color: "text-yellow-500/50" },
-    { id: 8, delay: "14s", pos: { right: "5%" }, color: "text-red-500/50" },
-  ];
+export default function FallingLeaves() {
+  const [leaves, setLeaves] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Генерируем 15 случайных листиков
+    const newLeaves = Array.from({ length: 15 }).map((_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      animationDuration: `${Math.random() * 10 + 10}s`, // от 10 до 20 секунд
+      animationDelay: `${Math.random() * 10}s`,
+      opacity: Math.random() * 0.4 + 0.2,
+      size: `${Math.random() * 20 + 20}px`, // размер от 20 до 40px
+      // Чередуем теплые осенние цвета
+      color: ['#ea580c', '#c2410c', '#fb923c', '#d97706'][Math.floor(Math.random() * 4)]
+    }));
+    setLeaves(newLeaves);
+  }, []);
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
       {leaves.map((leaf) => (
-        <svg 
-          key={leaf.id} 
-          className={`leaf w-7 h-7 ${leaf.color}`} 
-          style={{ animationDelay: leaf.delay, ...leaf.pos }} 
-          fill="currentColor" 
-          viewBox="0 0 24 24"
+        <div
+          key={leaf.id}
+          className="absolute top-[-50px] animate-fall"
+          style={{
+            left: leaf.left,
+            animationDuration: leaf.animationDuration,
+            animationDelay: leaf.animationDelay,
+            opacity: leaf.opacity,
+            width: leaf.size,
+            height: leaf.size,
+            color: leaf.color
+          }}
         >
-          <path d={starLeafPath} />
-        </svg>
+          {/* Исправленная форма листа */}
+          <svg viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' }}>
+            <path d="M216,40c-2,28.56-22,79.78-53.86,111.65C136.14,177.65,99.42,196.44,55,197.86a8,8,0,0,1-7.63-3.95L33.66,207.58a8,8,0,0,1-11.32-11.31l13.67-13.68A8,8,0,0,1,32.07,175c1.43-44.4,20.22-81.12,46.22-107.11C110.15,36,161.4,16,216,16A24.05,24.05,0,0,1,240,40ZM146.68,140.79a8,8,0,1,0-11.32-11.31l32-32a8,8,0,0,0,11.32,11.31Z"/>
+          </svg>
+        </div>
       ))}
+      <style>{`
+        @keyframes fall {
+          0% {
+            transform: translateY(0) rotate(0deg) translateX(0);
+          }
+          25% {
+            transform: translateY(25vh) rotate(90deg) translateX(20px);
+          }
+          50% {
+            transform: translateY(50vh) rotate(180deg) translateX(-20px);
+          }
+          75% {
+            transform: translateY(75vh) rotate(270deg) translateX(20px);
+          }
+          100% {
+            transform: translateY(110vh) rotate(360deg) translateX(0);
+          }
+        }
+        .animate-fall {
+          animation-name: fall;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+      `}</style>
     </div>
   );
 }
