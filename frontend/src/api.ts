@@ -18,6 +18,8 @@ export interface Job {
   status: JobStatus;
   filename: string;
   max_size: number;
+  start_seconds: number;
+  end_seconds: number | null;
   input: FileInfo;
   output: FileInfo | null;
   metrics: Record<string, number>;
@@ -83,6 +85,8 @@ export async function getHealth(signal?: AbortSignal): Promise<Health> {
 
 export interface UploadOptions {
   maxSize?: number;
+  startSeconds?: number;
+  endSeconds?: number;
   signal?: AbortSignal;
   onProgress?: (fraction: number) => void;
 }
@@ -94,12 +98,16 @@ export async function uploadMedia(
   file: File,
   kind: MediaKind,
   mode: Mode,
-  { maxSize, signal, onProgress }: UploadOptions = {},
+  { maxSize, startSeconds, endSeconds, signal, onProgress }: UploadOptions = {},
 ): Promise<Job> {
   const form = new FormData();
   form.append('file', file);
   form.append('mode', mode);
-  if (kind === 'image' && maxSize) form.append('max_size', String(maxSize));
+  if (maxSize) form.append('max_size', String(maxSize));
+  if (kind === 'video') {
+    if (startSeconds !== undefined) form.append('start_seconds', String(startSeconds));
+    if (endSeconds !== undefined) form.append('end_seconds', String(endSeconds));
+  }
 
   const url = kind === 'video' ? '/api/upscale/video' : '/api/upscale';
   const { data } = await http.post<Job>(url, form, {
@@ -111,9 +119,27 @@ export async function uploadMedia(
   return data;
 }
 
+export async function previewVideo(
+  file: File, startSeconds: number, durationSeconds: number, signal?: AbortSignal,
+): Promise<{ blob: Blob; duration: number }> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('start_seconds', String(startSeconds));
+  form.append('duration_seconds', String(durationSeconds));
+  const response = await http.post<Blob>('/api/upscale/video/preview', form, {
+    signal, responseType: 'blob',
+  });
+  return { blob: response.data, duration: Number(response.headers['x-video-duration']) };
+}
+
 export async function getJob(id: string, signal?: AbortSignal): Promise<Job> {
   const { data } = await http.get<Job>(`/api/jobs/${id}`, { signal });
   return data;
+}
+
+export function downloadName(job: Job): string {
+  const base = job.filename.replace(/\.[^.]+$/, '') || 'upscaled';
+  return `${base}_${job.mode}.${job.kind === 'video' ? 'mp4' : 'png'}`;
 }
 
 export async function listJobs(

@@ -144,8 +144,10 @@ def test_only_finished_images_can_be_published(make_settings: SettingsFactory) -
         assert feed(client)["items"] == []
 
 
-def test_failed_video_cannot_be_published(client: TestClient) -> None:
-    response = client.post("/api/upscale/video", files={"file": ("clip.mp4", b"fake", "video/mp4")})
+def test_video_cannot_be_published(client: TestClient, video_factory) -> None:
+    response = client.post(
+        "/api/upscale/video", files={"file": ("clip.mp4", video_factory(), "video/mp4")}
+    )
     job_id = response.json()["id"]
     assert client.post(f"/api/jobs/{job_id}/publish").status_code == 409
 

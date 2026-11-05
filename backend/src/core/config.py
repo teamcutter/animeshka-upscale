@@ -25,6 +25,7 @@ class UpscaleSettings(BaseModel):
     model_path: Path = Path("./weights/upscale_model")
     tile_size: int = Field(default=512, ge=64, le=2048)
     device: Literal["auto", "cuda", "mps", "cpu"] = "auto"
+    mps_bridge_url: str | None = None
     scale: int = Field(default=2, ge=1, le=4)
 
     @property

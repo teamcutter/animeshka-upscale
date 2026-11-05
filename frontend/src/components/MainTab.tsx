@@ -4,6 +4,7 @@ import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slide
 import { AlertCircle, Download, Loader2, UploadCloud } from 'lucide-react';
 
 import {
+  downloadName,
   errorMessage,
   isAbort,
   uploadMedia,
@@ -14,8 +15,9 @@ import {
   type Mode,
 } from '../api';
 import { formatBytes } from '../hooks';
+import VideoSelection from './VideoSelection';
 
-type Phase = 'idle' | 'uploading' | 'queued' | 'processing' | 'done' | 'error';
+type Phase = 'idle' | 'selecting' | 'uploading' | 'queued' | 'processing' | 'done' | 'error';
 
 // Match image.max_size_mb / video.max_size_mb in backend/config.yml.
 const LIMITS: Record<MediaKind, { mb: number; accept: Record<string, string[]>; hint: string }> = {
@@ -26,8 +28,8 @@ const LIMITS: Record<MediaKind, { mb: number; accept: Record<string, string[]>; 
   },
   video: {
     mb: 200,
-    accept: { 'video/mp4': ['.mp4'], 'video/quicktime': ['.mov'], 'video/webm': ['.webm'], 'video/x-matroska': ['.mkv'] },
-    hint: 'MP4, MOV, WEBM, MKV до 200 MB',
+    accept: { 'video/mp4': ['.mp4'], 'video/quicktime': ['.mov'], 'video/webm': ['.webm'], 'video/x-matroska': ['.mkv'], 'video/x-msvideo': ['.avi'] },
+    hint: 'MP4, MOV, WEBM, MKV, AVI до 200 MB',
   },
 };
 
@@ -35,11 +37,6 @@ const MODE_LABEL: Record<Mode, string> = { '2k': 'Улучшение в 2K (x2)'
 
 const SELECT =
   'bg-white/60 border border-orange-200 text-stone-700 text-sm rounded-xl focus:ring-orange-400 focus:border-orange-400 block p-2.5 outline-none disabled:opacity-60';
-
-function downloadName(job: Job): string {
-  const base = job.filename.replace(/\.[^.]+$/, '') || 'upscaled';
-  return `${base}_${job.mode}.png`;
-}
 
 export default function MainTab({ health }: { health: Health | null }) {
   const [kind, setKind] = useState<MediaKind>('image');
@@ -49,6 +46,9 @@ export default function MainTab({ health }: { health: Health | null }) {
   const [job, setJob] = useState<Job | null>(null);
   const [beforeUrl, setBeforeUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+  const [previewStart, setPreviewStart] = useState(0);
 
   // Cancels the upload/polling of the current job on reset or unmount.
   const controllerRef = useRef<AbortController | null>(null);
@@ -59,6 +59,10 @@ export default function MainTab({ health }: { health: Health | null }) {
     if (!beforeUrl) return;
     return () => URL.revokeObjectURL(beforeUrl);
   }, [beforeUrl]);
+  useEffect(() => {
+    if (!videoPreviewUrl) return;
+    return () => URL.revokeObjectURL(videoPreviewUrl);
+  }, [videoPreviewUrl]);
 
   const modeAvailable = (candidate: Mode) => health?.modes[candidate] ?? true;
   // If the server has no weights for the selected mode, use one it has (derived, not stored).
@@ -71,12 +75,12 @@ export default function MainTab({ health }: { health: Health | null }) {
     setPhase('error');
   };
 
-  const run = async (file: File) => {
+  const run = async (file: File, startSeconds?: number, endSeconds?: number) => {
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
 
-    setBeforeUrl(kind === 'image' ? URL.createObjectURL(file) : null);
+    setBeforeUrl(URL.createObjectURL(file));
     setJob(null);
     setProgress(0);
     setPhase('uploading');
@@ -85,6 +89,8 @@ export default function MainTab({ health }: { health: Health | null }) {
       const created = await uploadMedia(file, kind, effectiveMode, {
         signal: controller.signal,
         onProgress: setProgress,
+        startSeconds,
+        endSeconds,
       });
       setJob(created);
       setPhase(created.status === 'processing' ? 'processing' : 'queued');
@@ -117,7 +123,15 @@ export default function MainTab({ health }: { health: Health | null }) {
       );
       return;
     }
-    void run(accepted[0]);
+    const file = accepted[0];
+    if (!file) return;
+    if (kind === 'video') {
+      setSelectedFile(file);
+      setBeforeUrl(URL.createObjectURL(file));
+      setPhase('selecting');
+    } else {
+      void run(file);
+    }
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -132,6 +146,9 @@ export default function MainTab({ health }: { health: Health | null }) {
     controllerRef.current?.abort();
     setJob(null);
     setBeforeUrl(null);
+    setSelectedFile(null);
+    setVideoPreviewUrl(null);
+    setPreviewStart(0);
     setError('');
     setPhase('idle');
   };
@@ -145,7 +162,7 @@ export default function MainTab({ health }: { health: Health | null }) {
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h2 className="text-2xl font-bold text-stone-800">Создать работу</h2>
         <div className="flex space-x-2">
-          <select value={effectiveMode} onChange={(e) => setMode(e.target.value as Mode)} disabled={phase !== 'idle'} className={SELECT}>
+          <select value={effectiveMode} onChange={(e) => setMode(e.target.value as Mode)} disabled={phase !== 'idle' && phase !== 'selecting'} className={SELECT}>
             {(Object.keys(MODE_LABEL) as Mode[]).map((candidate) => (
               <option key={candidate} value={candidate} disabled={!modeAvailable(candidate)}>
                 {MODE_LABEL[candidate]}
@@ -178,6 +195,15 @@ export default function MainTab({ health }: { health: Health | null }) {
         </div>
       )}
 
+      {phase === 'selecting' && selectedFile && beforeUrl && (
+        <VideoSelection
+          file={selectedFile} sourceUrl={beforeUrl} previewUrl={videoPreviewUrl}
+          onPreview={(blob, start) => { setVideoPreviewUrl(URL.createObjectURL(blob)); setPreviewStart(start); }}
+          onSubmit={(start, end) => void run(selectedFile, start, end)}
+          onCancel={reset}
+        />
+      )}
+
       {busy && (
         <div className="rounded-2xl bg-orange-50/50 border border-orange-200/50 p-12 text-center flex flex-col items-center">
           <Loader2 className="animate-spin w-12 h-12 text-orange-500 mb-4" />
@@ -187,7 +213,11 @@ export default function MainTab({ health }: { health: Health | null }) {
             {phase === 'processing' && 'Real-ESRGAN обрабатывает файл…'}
           </p>
           <p className="text-sm text-stone-600">
-            {phase === 'queued' ? 'Задача принята, ждём свободный воркер.' : 'Это может занять от нескольких секунд до минуты.'}
+            {phase === 'queued'
+              ? 'Задача принята, ждём свободный воркер.'
+              : kind === 'video'
+                ? 'Видео обрабатывается покадрово. Это может занять несколько минут или дольше.'
+                : 'Это может занять от нескольких секунд до минуты.'}
           </p>
           {job && <p className="text-xs text-stone-400 mt-4 font-mono">job {job.id}</p>}
         </div>
@@ -196,30 +226,56 @@ export default function MainTab({ health }: { health: Health | null }) {
       {phase === 'done' && job && job.result_url && (
         <div>
           <div className="rounded-2xl overflow-hidden mb-4 h-[480px] bg-stone-900 relative">
-            {beforeUrl ? (
+            {job.kind === 'image' && beforeUrl ? (
               <ReactCompareSlider
                 itemOne={<ReactCompareSliderImage src={beforeUrl} alt="До" />}
                 itemTwo={<ReactCompareSliderImage src={job.result_url} alt="После" />}
                 className="h-full w-full"
               />
             ) : (
-              <video src={job.result_url} controls className="h-full w-full" />
+              <div className="grid grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1 h-full gap-2">
+                <div className="relative min-h-0">
+                  <video src={videoPreviewUrl ?? beforeUrl ?? undefined} controls playsInline preload="metadata" aria-label="Исходное видео" className="h-full w-full"
+                    onLoadedMetadata={(e) => { e.currentTarget.currentTime = Math.max(0, (job.start_seconds ?? 0) - (videoPreviewUrl ? previewStart : 0)); }}
+                  />
+                  <div className="absolute top-3 left-3 bg-black/60 text-white px-3 py-1 rounded-md text-xs pointer-events-none">
+                    До · {job.input.width}×{job.input.height}
+                  </div>
+                </div>
+                <div className="relative min-h-0">
+                  <video src={job.result_url} controls playsInline preload="metadata" aria-label="Улучшенное видео" className="h-full w-full" />
+                  <div className="absolute top-3 left-3 bg-orange-600/90 text-white px-3 py-1 rounded-md text-xs pointer-events-none">
+                    После ({job.mode}) · {job.output?.width}×{job.output?.height}
+                  </div>
+                </div>
+              </div>
             )}
-            <div className="absolute top-3 left-3 bg-black/60 text-white px-3 py-1 rounded-md text-xs pointer-events-none">
-              До · {job.input.width}×{job.input.height}
-            </div>
-            <div className="absolute top-3 right-3 bg-orange-600/90 text-white px-3 py-1 rounded-md text-xs pointer-events-none">
-              После ({job.mode}) · {job.output?.width}×{job.output?.height}
-            </div>
+            {job.kind === 'image' && (
+              <>
+                <div className="absolute top-3 left-3 bg-black/60 text-white px-3 py-1 rounded-md text-xs pointer-events-none">
+                  До · {job.input.width}×{job.input.height}
+                </div>
+                <div className="absolute top-3 right-3 bg-orange-600/90 text-white px-3 py-1 rounded-md text-xs pointer-events-none">
+                  После ({job.mode}) · {job.output?.width}×{job.output?.height}
+                </div>
+              </>
+            )}
           </div>
 
-          <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 text-sm">
+          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3 text-sm">
             {[
               ['Время', `${metric('processing_seconds')} с`],
               ['Размер', job.output ? formatBytes(job.output.size_bytes) : '—'],
               ['Мегапиксели', metric('output_megapixels')],
               ['PSNR', `${metric('psnr_db', 1)} дБ`],
               ['SSIM', metric('ssim', 3)],
+              ...(job.kind === 'video'
+                ? [
+                    ['Кадры', metric('frame_count', 0)],
+                    ['Частота', `${metric('fps')} FPS`],
+                    ['Длительность', `${metric('duration_seconds')} с`],
+                  ]
+                : []),
               ['Файл', job.filename],
             ].map(([label, value]) => (
               <div key={label} className="bg-orange-50/60 border border-orange-100 rounded-xl p-3">
@@ -230,6 +286,13 @@ export default function MainTab({ health }: { health: Health | null }) {
               </div>
             ))}
           </dl>
+
+          <p className="text-xs text-stone-500 mb-6">
+            {job.kind === 'video' && job.metrics.quality_sample_count !== undefined && (
+              <>Метрики усреднены по {metric('quality_sample_count', 0)} кадрам до сжатия MP4. </>
+            )}
+            PSNR и SSIM оценивают сходство с исходником после уменьшения результата до исходного разрешения.
+          </p>
 
           <div className="flex justify-between items-center">
             <button onClick={reset} className="bg-white/60 text-stone-700 border border-orange-200 px-6 py-2 rounded-xl font-medium hover:bg-orange-50 transition-colors">

@@ -42,6 +42,8 @@ def job_from_row(row: JobRow) -> Job:
         status=JobStatus(row.status),
         original_filename=row.original_filename,
         max_size=row.max_size,
+        start_seconds=row.start_seconds,
+        end_seconds=row.end_seconds,
         input=files[FileRole.INPUT],
         output=files.get(FileRole.OUTPUT),
         error=row.error,
@@ -59,6 +61,8 @@ def _apply(row: JobRow, job: Job) -> None:
     row.status = job.status.value
     row.original_filename = job.original_filename
     row.max_size = job.max_size
+    row.start_seconds = job.start_seconds
+    row.end_seconds = job.end_seconds
     row.error = job.error
     row.created_at = job.created_at
     row.updated_at = job.updated_at

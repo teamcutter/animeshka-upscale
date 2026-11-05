@@ -93,6 +93,88 @@
           "rawSql": "SELECT j.created_at AS \"time\", j.kind AS \"kind\", j.mode AS \"mode\", j.status AS \"status\", j.original_filename AS \"file\", max(m.value) FILTER (WHERE m.name = 'processing_seconds') AS \"seconds\", max(m.value) FILTER (WHERE m.name = 'input_megapixels') AS \"input_mp\", max(m.value) FILTER (WHERE m.name = 'output_megapixels') AS \"output_mp\", max(m.value) FILTER (WHERE m.name = 'megapixels_per_second') AS \"mp_per_s\", max(m.value) FILTER (WHERE m.name = 'input_size_bytes') AS \"input_bytes\", max(m.value) FILTER (WHERE m.name = 'output_size_bytes') AS \"output_bytes\" FROM jobs j LEFT JOIN metrics m ON m.job_id = j.id WHERE $__timeFilter(j.created_at) GROUP BY j.id, j.created_at, j.kind, j.mode, j.status, j.original_filename ORDER BY j.created_at DESC"
         }
       ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Video quality & processing",
+      "description": "Selected video intervals, quality averaged over sampled model-output frames before MP4 compression, frame rate and processing time. Metrics are written when processing finishes.",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "input_bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "output_bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "seconds"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "SELECT j.created_at AS \"time\", j.status, j.mode, j.original_filename AS \"file\", j.start_seconds, j.end_seconds, max(m.value) FILTER (WHERE m.name = 'processing_seconds') AS \"processing_seconds\", max(m.value) FILTER (WHERE m.name = 'frame_count') AS \"frame_count\", max(m.value) FILTER (WHERE m.name = 'fps') AS \"fps\", max(m.value) FILTER (WHERE m.name = 'duration_seconds') AS \"duration_seconds\", max(m.value) FILTER (WHERE m.name = 'psnr_db') AS \"psnr_db\", max(m.value) FILTER (WHERE m.name = 'ssim') AS \"ssim\", max(m.value) FILTER (WHERE m.name = 'sharpness_bicubic') AS \"sharpness_bicubic\", max(m.value) FILTER (WHERE m.name = 'sharpness_output') AS \"sharpness_output\", max(m.value) FILTER (WHERE m.name = 'quality_sample_count') AS \"quality_sample_count\" FROM jobs j LEFT JOIN metrics m ON m.job_id = j.id WHERE j.kind = 'video' AND $__timeFilter(j.created_at) GROUP BY j.id, j.created_at, j.status, j.mode, j.original_filename, j.start_seconds, j.end_seconds ORDER BY j.created_at DESC"
+        }
+      ]
     }
   ],
   "refresh": "30s",
@@ -104,6 +186,6 @@
   "timezone": "browser",
   "title": "Animeshka — Jobs & media sizes (PostgreSQL)",
   "uid": "animeshka-jobs",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

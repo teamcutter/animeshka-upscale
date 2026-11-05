@@ -24,6 +24,8 @@ class JobResponse(BaseModel):
     status: JobStatus
     filename: str
     max_size: int
+    start_seconds: float
+    end_seconds: float | None
     input: FileInfo
     output: FileInfo | None
     metrics: dict[str, float]
@@ -44,6 +46,8 @@ class JobResponse(BaseModel):
             status=job.status,
             filename=job.original_filename,
             max_size=job.max_size,
+            start_seconds=job.start_seconds,
+            end_seconds=job.end_seconds,
             input=FileInfo.from_media(job.input),
             output=FileInfo.from_media(job.output) if job.output else None,
             metrics=job.metrics,

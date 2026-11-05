@@ -68,6 +68,8 @@ class JobRow(Base):
     status: Mapped[str] = mapped_column(String(16))
     original_filename: Mapped[str] = mapped_column(String(255))
     max_size: Mapped[int] = mapped_column(Integer)
+    start_seconds: Mapped[float] = mapped_column(Float, server_default="0")
+    end_seconds: Mapped[float | None] = mapped_column(Float)
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

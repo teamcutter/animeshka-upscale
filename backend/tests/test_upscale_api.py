@@ -97,13 +97,11 @@ def test_upscale_rejects_unknown_mode(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_video_job_is_created(client: TestClient) -> None:
+def test_video_rejects_unreadable_upload(client: TestClient, tmp_path: Path) -> None:
     response = client.post("/api/upscale/video", files={"file": ("clip.mp4", b"fake", "video/mp4")})
-    assert response.status_code == 202
-    job = client.get(f"/api/jobs/{response.json()['id']}").json()
-    assert job["kind"] == "video"
-    assert job["status"] == "failed"
-    assert job["input"]["size_bytes"] == 4
+    assert response.status_code == 422
+    assert client.get("/api/jobs").json() == []
+    assert not list((tmp_path / "data" / "inputs").iterdir())
 
 
 def test_video_rejects_unknown_extension(client: TestClient) -> None:
@@ -116,22 +114,23 @@ def test_unknown_job_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_result_not_ready(client: TestClient) -> None:
-    response = client.post("/api/upscale/video", files={"file": ("clip.mp4", b"fake", "video/mp4")})
-    result = client.get(f"/api/jobs/{response.json()['id']}/result")
-    assert result.status_code == 409
+def test_result_not_ready(make_settings: SettingsFactory) -> None:
+    with TestClient(create_app(make_settings(embedded=False))) as client:
+        register(client)
+        job_id = upload(client)["id"]
+        assert client.get(f"/api/jobs/{job_id}/result").status_code == 409
 
 
 def test_list_jobs_newest_first_with_status_filter(client: TestClient) -> None:
     image_id = upload(client)["id"]
-    video = client.post("/api/upscale/video", files={"file": ("clip.mp4", b"x", "video/mp4")})
-    video_id = video.json()["id"]
+    second_id = upload(client)["id"]
 
     jobs = client.get("/api/jobs").json()
-    assert [job["id"] for job in jobs] == [video_id, image_id]
+    assert [job["id"] for job in jobs] == [second_id, image_id]
 
     done = client.get("/api/jobs", params={"status": "done"}).json()
-    assert [job["id"] for job in done] == [image_id]
+    assert [job["id"] for job in done] == [second_id, image_id]
+    assert client.get("/api/jobs", params={"status": "failed"}).json() == []
 
     page = client.get("/api/jobs", params={"limit": 1, "offset": 1}).json()
     assert [job["id"] for job in page] == [image_id]

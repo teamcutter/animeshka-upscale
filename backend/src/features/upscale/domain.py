@@ -51,6 +51,8 @@ class Job:
     original_filename: str
     input: MediaFile
     max_size: int = 1920
+    start_seconds: float = 0.0
+    end_seconds: float | None = None
     id: UUID = field(default_factory=uuid4)
     # The user who uploaded the file; None only for jobs from before accounts existed.
     owner_id: UUID | None = None
