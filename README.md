@@ -292,7 +292,11 @@ uv run alembic downgrade -1
 
 ### API
 
-Everything under `/api` except `/api/auth/*` and `/api/metrics` needs a login. The session lives
+Everything under `/api` except `/api/auth/*` and `/api/metrics` needs a login, unless
+`AUTH__REQUIRED=false` (`auth.required` in `config.yml`): then requests without a session run as a
+shared built-in guest account (`guest@animeshka.local`, no usable password) and `/health` reports
+`"auth": "open"`. Use that for local runs and metric collection while the UI has no login screen;
+never in production. Logged-in users keep their own history either way. The session lives
 in an HttpOnly cookie (`animeshka_session`, `SameSite=Lax`, 30 days by default), so the browser
 sends it by itself, also for `<img src>`, `<video src>` and download links to
 `/api/jobs/{id}/result`. Each user sees and downloads only their own jobs (someone else's job

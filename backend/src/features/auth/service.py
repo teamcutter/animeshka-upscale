@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 # Checked when the email is unknown, so a wrong email takes as long as a wrong password.
 _DUMMY_HASH = hash_password("not-a-real-password")
 
+# The account anonymous requests run as when auth.required is False. Its password is random and
+# never shown, so nobody can log in as the guest once auth is required again.
+GUEST_EMAIL = "guest@animeshka.local"
+GUEST_NAME = "Гость"
+
 
 def normalize_email(email: str) -> str:
     return email.strip().lower()
@@ -27,10 +32,35 @@ class AuthService:
     def __init__(self, users: UserRepository, settings: AuthSettings) -> None:
         self._users = users
         self._settings = settings
+        self._guest: User | None = None
 
     @property
     def session_ttl(self) -> timedelta:
         return timedelta(days=self._settings.session_days)
+
+    @property
+    def required(self) -> bool:
+        return self._settings.required
+
+    def guest(self) -> User:
+        """The shared guest account (created on first use); only used when auth is not required."""
+        if self._guest is None:
+            user = self._users.get_by_email(GUEST_EMAIL)
+            if user is None:
+                user = User(
+                    email=GUEST_EMAIL,
+                    name=GUEST_NAME,
+                    password_hash=hash_password(new_session_token()),
+                )
+                try:
+                    self._users.add(user)
+                    logger.warning("Auth is disabled: anonymous requests run as %s", GUEST_EMAIL)
+                except ConflictError:
+                    # Another process created it first.
+                    user = self._users.get_by_email(GUEST_EMAIL)
+                    assert user is not None
+            self._guest = user
+        return self._guest
 
     def register(self, email: str, password: str, name: str) -> User:
         email = normalize_email(email)

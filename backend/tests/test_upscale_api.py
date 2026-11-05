@@ -31,6 +31,7 @@ def test_health(client: TestClient) -> None:
         "database": "ok",
         "backend": "stub",
         "worker": "embedded",
+        "auth": "required",
         "modes": {"2k": True, "4k": True},
     }
 
@@ -47,6 +48,9 @@ def test_upscale_image_flow(client: TestClient, mode: str, scale: int) -> None:
     assert job["output"]["width"] == 64 * scale
     assert job["output"]["height"] == 48 * scale
     assert job["metrics"]["processing_seconds"] >= 0
+    # Quality metrics from quality.py are stored with every finished image job.
+    assert {"psnr_db", "ssim", "sharpness_bicubic", "sharpness_output"} <= job["metrics"].keys()
+    assert 0 < job["metrics"]["ssim"] <= 1
     assert job["metrics"]["input_megapixels"] > 0
     assert job["metrics"]["output_megapixels"] > 0
     assert job["metrics"]["megapixels_per_second"] > 0

@@ -67,6 +67,9 @@ class MetricsSettings(BaseModel):
 
 
 class AuthSettings(BaseModel):
+    # False: requests without a login run as a shared built-in "guest" user (local runs,
+    # collecting metrics before the frontend has a login screen). Never disable it in production.
+    required: bool = True
     session_days: int = Field(default=30, ge=1)
     # True behind HTTPS: the browser then sends the session cookie only over TLS.
     cookie_secure: bool = False

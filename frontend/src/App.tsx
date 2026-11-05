@@ -4,13 +4,15 @@ import ProfileTab from './components/ProfileTab';
 import HistoryTab from './components/HistoryTab';
 import AuthScreen from './components/AuthScreen';
 import FallingLeaves from './components/FallingLeaves';
-import { useAuth } from './context/AuthContext';
+import ServerStatus from './components/ServerStatus';
+import { useAuth } from './context/useAuth';
 import { useHealth } from './hooks';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'main' | 'history' | 'profile'>('main');
   const { user, isLoading } = useAuth();
-  const { health } = useHealth();
+  // Re-check the server (backend, available modes, auth) whenever the user switches tabs.
+  const { health, unreachable } = useHealth(activeTab);
 
   if (isLoading) {
     return (
@@ -20,7 +22,6 @@ export default function App() {
     );
   }
 
-  
   if (!user) {
     return (
       <>
@@ -29,7 +30,6 @@ export default function App() {
       </>
     );
   }
-  
 
   return (
     <div className="min-h-screen flex flex-col relative">
@@ -38,8 +38,11 @@ export default function App() {
       
       <header className="bg-orange-200/70 backdrop-blur-md border-b border-orange-300/50 sticky top-0 z-10 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-orange-900 font-bold text-xl tracking-tight">
-            <span>Animeshka Upscale</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 text-orange-900 font-bold text-xl tracking-tight">
+              <span>Animeshka Upscale</span>
+            </div>
+            <ServerStatus health={health} unreachable={unreachable} />
           </div>
           
           <nav className="flex space-x-1 bg-orange-900/10 p-1 rounded-xl">
