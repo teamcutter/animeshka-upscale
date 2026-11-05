@@ -5,12 +5,14 @@ from sqlalchemy import Engine, text
 
 from src.core.config import Settings, UpscaleSettings
 from src.features.auth.service import AuthService
+from src.features.feed.service import FeedService
 from src.features.upscale.domain import Mode
 from src.features.upscale.ports import Upscaler
 from src.features.upscale.service import UpscaleService
 from src.infrastructure.db.engine import create_db_engine, create_session_factory
 from src.infrastructure.db.migrate import upgrade_database
 from src.infrastructure.storage.files import LocalFileStorage
+from src.infrastructure.storage.posts import SqlPostRepository
 from src.infrastructure.storage.sql import SqlJobRepository
 from src.infrastructure.storage.users import SqlUserRepository
 from src.infrastructure.upscale import RealESRGANUpscaler, UpscalerConfig
@@ -43,6 +45,7 @@ class Container:
     upscalers: dict[Mode, Upscaler]
     upscale_service: UpscaleService
     auth_service: AuthService
+    feed_service: FeedService
     models_loaded: bool = False
 
     @classmethod
@@ -63,6 +66,7 @@ class Container:
             upscalers=upscalers,
             upscale_service=service,
             auth_service=AuthService(SqlUserRepository(sessions), settings.auth),
+            feed_service=FeedService(SqlPostRepository(sessions), service),
         )
 
     def startup(self, *, load_models: bool = True) -> None:

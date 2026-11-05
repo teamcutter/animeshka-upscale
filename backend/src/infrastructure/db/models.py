@@ -78,6 +78,8 @@ class JobRow(Base):
     metrics: Mapped[list["MetricRow"]] = relationship(
         back_populates="job", cascade="all, delete-orphan", lazy="selectin"
     )
+    # Read-only here: posts are written by the feed repository, deleted by ON DELETE CASCADE.
+    post: Mapped["PostRow | None"] = relationship(viewonly=True, lazy="selectin")
 
 
 class FileRow(Base):
@@ -110,3 +112,17 @@ class MetricRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     job: Mapped[JobRow] = relationship(back_populates="metrics")
+
+
+class PostRow(Base):
+    """A finished job its owner shared in the public feed (at most one post per job)."""
+
+    __tablename__ = "posts"
+    # The feed is read newest first and paged by (published_at, id).
+    __table_args__ = (Index("ix_posts_published_at_id", "published_at", "id"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), unique=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    job: Mapped[JobRow] = relationship()
