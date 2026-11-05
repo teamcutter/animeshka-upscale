@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Download, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 
-import { deleteJob, errorMessage, isAbort, listJobs, type Job, type JobStatus } from '../api';
-import { formatBytes, formatDate } from '../hooks';
+import { deleteJob, downloadName, errorMessage, isAbort, listJobs, type Job, type JobStatus } from '../api';
+import { formatBytes, formatDate, videoTime } from '../hooks';
 
 const STATUS: Record<JobStatus, { label: string; className: string }> = {
   queued: { label: 'В очереди', className: 'bg-stone-100 text-stone-600 border-stone-200' },
@@ -68,7 +68,7 @@ export default function HistoryTab() {
       )}
       {jobs && jobs.length === 0 && (
         <p className="text-stone-600 bg-white/80 backdrop-blur-md rounded-2xl border border-orange-200/50 p-12 text-center">
-          Пока пусто — загрузите первое изображение на главной.
+          Пока пусто — загрузите первое изображение или видео на главной.
         </p>
       )}
 
@@ -78,6 +78,8 @@ export default function HistoryTab() {
             <div className="h-48 bg-orange-100/30 flex items-center justify-center overflow-hidden border-b border-orange-100/50">
               {job.result_url && job.kind === 'image' ? (
                 <img src={job.result_url} alt={job.filename} className="h-full w-full object-cover" loading="lazy" />
+              ) : job.result_url && job.kind === 'video' ? (
+                <video src={job.result_url} controls playsInline preload="metadata" aria-label={job.filename} className="h-full w-full" />
               ) : (
                 <span className="text-stone-600 text-sm font-medium bg-white/70 backdrop-blur-sm px-4 py-2 rounded-xl shadow-sm border border-orange-100 mx-4 text-center">
                   {job.status === 'failed' ? job.error : `${job.kind === 'video' ? 'Видео' : 'Изображение'} · ${STATUS[job.status].label}`}
@@ -102,11 +104,20 @@ export default function HistoryTab() {
                 {job.metrics.psnr_db !== undefined && ` · PSNR ${job.metrics.psnr_db.toFixed(1)}`}
                 {job.metrics.ssim !== undefined && ` · SSIM ${job.metrics.ssim.toFixed(3)}`}
               </div>
+              {job.kind === 'video' && job.metrics.frame_count !== undefined && (
+                <div className="mt-1 text-xs text-stone-500">
+                  {job.metrics.frame_count.toFixed(0)} кадров
+                  {job.end_seconds != null && ` · ${videoTime(job.start_seconds ?? 0)}–${videoTime(job.end_seconds)}`}
+                  {job.metrics.fps !== undefined && ` · ${job.metrics.fps.toFixed(2)} FPS`}
+                  {job.metrics.duration_seconds !== undefined && ` · ${job.metrics.duration_seconds.toFixed(1)} с`}
+                  {job.metrics.quality_sample_count !== undefined && ` · Метрики по ${job.metrics.quality_sample_count.toFixed(0)} кадрам`}
+                </div>
+              )}
               <div className="mt-5 pt-4 border-t border-orange-100/50 mt-auto flex gap-2">
                 {job.result_url ? (
                   <a
                     href={job.result_url}
-                    download={`${job.filename.replace(/\.[^.]+$/, '')}_${job.mode}.png`}
+                    download={downloadName(job)}
                     className="flex-1 flex items-center justify-center gap-2 bg-orange-100 text-orange-700 py-2.5 rounded-xl text-sm font-bold hover:bg-orange-200 transition-colors shadow-sm"
                   >
                     <Download size={14} /> Скачать{job.output ? ` (${formatBytes(job.output.size_bytes)})` : ''}

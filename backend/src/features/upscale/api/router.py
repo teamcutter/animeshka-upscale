@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from src.features.auth.api.deps import CurrentUser
 from src.features.upscale.api.schemas import JobResponse
@@ -72,13 +72,44 @@ async def upscale_video(
     background: BackgroundTasks,
     file: Annotated[UploadFile, File()],
     mode: Annotated[Mode, Form()] = Mode.X2K,
+    max_size: Annotated[int, Form(ge=64, le=4096)] = 1920,
+    start_seconds: Annotated[float, Form(ge=0, allow_inf_nan=False)] = 0,
+    end_seconds: Annotated[float | None, Form(gt=0, allow_inf_nan=False)] = None,
 ) -> JobResponse:
     data = await read_upload(file, service.video_limit_bytes)
     job = await run_in_threadpool(
-        partial(service.create_video_job, owner_id=user.id), file.filename or "upload", data, mode
+        partial(
+            service.create_video_job,
+            owner_id=user.id,
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
+        ),
+        file.filename or "upload",
+        data,
+        mode,
+        max_size,
     )
     schedule(request, background, service, job)
     return JobResponse.from_job(job)
+
+
+@router.post("/upscale/video/preview")
+async def preview_video(
+    user: CurrentUser,
+    service: Service,
+    file: Annotated[UploadFile, File()],
+    start_seconds: Annotated[float, Form(ge=0, allow_inf_nan=False)] = 0,
+    duration_seconds: Annotated[float, Form(gt=0, le=30, allow_inf_nan=False)] = 10,
+) -> Response:
+    data = await read_upload(file, service.video_limit_bytes)
+    preview, duration = await run_in_threadpool(
+        service.preview_video, file.filename or "upload", data, start_seconds, duration_seconds
+    )
+    return Response(
+        preview,
+        media_type="video/mp4",
+        headers={"X-Video-Duration": str(duration), "Cache-Control": "no-store"},
+    )
 
 
 @router.get("/jobs", response_model=list[JobResponse])

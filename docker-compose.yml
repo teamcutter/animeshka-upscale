@@ -15,6 +15,8 @@ x-backend: &backend
     WORKER__EMBEDDED: "false"
     STORAGE__DIR: /app/data
     UPSCALE__MODEL_PATH: /app/weights/upscale_model
+    # On Mac, prefer the authenticated native Metal bridge; unavailable -> CPU fallback.
+    UPSCALE__MPS_BRIDGE_URL: ${MPS_BRIDGE_URL:-http://host.docker.internal:8766}
   volumes:
     - ./backend/data:/app/data
     - ./backend/weights:/app/weights:ro

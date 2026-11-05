@@ -6,11 +6,11 @@ import tempfile
 from pathlib import Path
 
 import cv2
-import torch
 from PIL import Image
 
 from src.core.config import get_settings
 from src.infrastructure.upscale import RealESRGANUpscaler, UpscalerConfig
+from src.infrastructure.upscale.device import resolve_device
 
 logger = logging.getLogger(__name__)
 
@@ -45,26 +45,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("-v", "--verbose", action="store_true")
     return p
-
-
-def resolve_device(req: str) -> str:
-    req = req.lower()
-    if req == "auto":
-        if torch.cuda.is_available():
-            return "cuda"
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
-    if req == "cuda" and not torch.cuda.is_available():
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            logger.warning("CUDA not available, falling back to mps")
-            return "mps"
-        logger.warning("CUDA not available, falling back to cpu")
-        return "cpu"
-    if req == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
-        logger.warning("MPS not available, falling back to cpu")
-        return "cpu"
-    return req
 
 
 def make_upscaler(args: argparse.Namespace) -> RealESRGANUpscaler:

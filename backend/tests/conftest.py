@@ -1,4 +1,6 @@
 import os
+import shutil
+import subprocess
 from collections.abc import Callable, Iterator
 from io import BytesIO
 from pathlib import Path
@@ -15,6 +17,7 @@ from src.core.config import (
     Settings,
     StorageSettings,
     UpscaleSettings,
+    VideoSettings,
     WorkerSettings,
 )
 from src.infrastructure.db.engine import create_db_engine
@@ -48,6 +51,7 @@ def make_settings(tmp_path: Path, database_url: str) -> SettingsFactory:
             upscale=UpscaleSettings(backend="stub"),
             storage=StorageSettings(dir=tmp_path / "data"),
             image=ImageSettings(max_size_mb=1, max_width=256, max_height=256),
+            video=VideoSettings(max_size_mb=1),
             database=DatabaseSettings(url=database_url),
             worker=WorkerSettings(embedded=embedded, poll_interval=0.01),
         )
@@ -81,3 +85,30 @@ def make_png(width: int = 64, height: int = 48) -> bytes:
     buffer = BytesIO()
     Image.new("RGB", (width, height), "red").save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+@pytest.fixture
+def video_factory(tmp_path: Path) -> Callable[..., bytes]:
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("Video integration tests require FFmpeg and ffprobe")
+
+    def create(*, audio: bool = False, fps: str = "12", duration: float = 0.5) -> bytes:
+        path = tmp_path / "clip.mp4"
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"testsrc=size=64x48:rate={fps}:duration={duration}",
+        ]
+        if audio:
+            command += ["-f", "lavfi", "-i", f"sine=frequency=440:duration={duration}"]
+        command += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(path)]
+        subprocess.run(command, check=True, capture_output=True, timeout=30)
+        return path.read_bytes()
+
+    return create

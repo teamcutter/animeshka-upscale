@@ -131,7 +131,7 @@ Each part has its own README: [backend](backend/README.md), [frontend](frontend/
 
 * Docker + Docker Compose — enough to run everything
 * For local development: Python 3.11–3.12 + [uv](https://docs.astral.sh/uv/) ≥0.4, Node.js 24 + npm
-* `ffmpeg` for video remux (optional locally, included in the backend image)
+* `ffmpeg` with the `libx264` and AAC encoders for video processing (included in the backend image)
 * PostgreSQL 15+ , Grafana 10+ (docker-compose provides)
 * NVIDIA GPU with CUDA 12.1+ recommended; CPU fallback works (slow)
 
@@ -182,6 +182,37 @@ curl http://localhost:8000/health
 ```
 
 #### macOS (Apple Silicon)
+
+Start with automatic host detection:
+
+```bash
+bash scripts/run-stack.sh
+```
+
+On macOS, this starts a native MPS bridge on port 8766, then starts the regular container stack.
+The API, database, queue worker and frontend stay in containers. The container worker sends image
+and video frames to the bridge for GPU inference; if the bridge is unavailable, it uses the local
+CPU fallback. Linux containers cannot access Metal directly, even when their host is a Mac.
+On other operating systems the script starts the regular container stack without the bridge.
+Set `CONTAINER_ENGINE=docker` or `CONTAINER_ENGINE=podman` to select an engine; otherwise Podman
+is used if installed, then Docker.
+
+Equivalent manual Mac startup:
+
+```bash
+bash scripts/start-mps-bridge.sh
+podman compose up --build
+```
+
+The bridge requires `backend/.venv` and the Real-ESRGAN weights. It authenticates requests with
+a token generated in `backend/data/mps-bridge.token`, shared through the existing data mount.
+Its log and PID are in `backend/data/mps-bridge.log` and `backend/data/mps-bridge.pid`. It runs in
+the background and stays available for subsequent ordinary Compose starts. The default worker
+endpoint is `http://host.docker.internal:8766`; override `MPS_BRIDGE_URL` for another address.
+The queue, file paths, result URLs and Prometheus scrape target remain inside the container stack.
+Use `docker compose` instead of `podman compose` when running Docker Desktop.
+
+For the CPU-only container setup:
 
 Docker Desktop, OrbStack or Podman all work; the images are linux/arm64 and the worker runs the
 model on CPU (no GPU passthrough on macOS, so leave `docker-compose.gpu.yml` out). CUDA wheels only
@@ -292,7 +323,33 @@ uv run alembic revision --autogenerate -m "add column"   # after changing backen
 uv run alembic downgrade -1
 ```
 
-> Video jobs are accepted and stored but not processed yet (frame-wise pipeline lives in `backend/src/cli.py`).
+Video uploads (`MP4`, `MOV`, `WEBM`, `MKV`, `AVI`, up to 200 MB by default) use the same
+queued/processing/done lifecycle as images, in both embedded and standalone worker modes.
+The worker enhances one frame at a time with the selected model, then streams it to FFmpeg
+as H.264/yuv420p MP4 with the first audio track encoded as AAC. Silent videos are supported.
+Output uses the source's reported frame rate (variable frame timing is normalized to that rate),
+and `max_size` limits the output's long side, defaulting to 1920 pixels, as it does for images.
+Invalid or unreadable uploads are rejected before a job is queued; failed processing removes
+partial output. FFmpeg must be installed on the worker for local development (`brew install ffmpeg`
+on macOS or `sudo apt-get install ffmpeg` on Debian/Ubuntu); Docker already includes it.
+
+Select **Тип: Видео** on the main tab, choose a file, and preview it before processing. Set start
+and end times using the sliders or numeric inputs; the default is the first 10 seconds, with an
+explicit **Всё видео** option for the full clip. Only the selected frames and matching audio are
+upscaled. The API accepts `start_seconds` (default 0) and optional `end_seconds` (exclusive).
+Intervals are rounded to frame boundaries and validated against the source duration; the selected
+range is persisted with the job. The entire source file is uploaded even when only a segment is used.
+
+For formats the browser cannot play directly, such as AVI, the UI requests a lightweight MP4
+preview of up to 30 seconds from `POST /api/upscale/video/preview` (same upload size limit,
+authenticated, no model inference or job creation). The API server also needs FFmpeg for this
+fallback. Preview the original and enhanced versions after processing and download the MP4.
+Finished videos can also be played and downloaded from history. Video job
+metrics include `frame_count`, `fps`, `duration_seconds`, model processing time, file sizes and
+throughput across all processed frames. PSNR, SSIM and sharpness metrics are averaged across
+sampled frames (the first frame, then every 30 frames); `quality_sample_count` records how many
+samples succeeded. As with image jobs, these measure the model output against the input, before
+MP4 encoding. They measure fidelity and sharpness, rather than temporal consistency or VMAF.
 
 ### API
 
@@ -324,7 +381,8 @@ curl -b jar -X POST http://localhost:8000/api/upscale \
 
 # video
 curl -b jar -X POST http://localhost:8000/api/upscale/video \
-  -F "file=@clip.mp4" -F "mode=4k"
+  -F "file=@clip.mp4" -F "mode=4k" -F "max_size=3840" \
+  -F "start_seconds=120" -F "end_seconds=130"
 
 # job status (+ input/output resolution and metrics)
 curl -b jar http://localhost:8000/api/jobs/<id>
@@ -353,7 +411,8 @@ curl -b jar -c jar -X POST http://localhost:8000/api/auth/logout
 | `/api/auth/logout` | POST | End the session; 204 |
 | `/api/auth/me` | GET | Current user (`id`, `email`, `name`, `created_at`); 401 if not logged in |
 | `/api/upscale` | POST | Image upscale (`file`, `mode=2k|4k`, `max_size`) |
-| `/api/upscale/video` | POST | Video upscale (frame-wise) |
+| `/api/upscale/video` | POST | Video upscale (`file`, `mode=2k\|4k`, `max_size`, `start_seconds`, `end_seconds`); H.264/AAC MP4 output |
+| `/api/upscale/video/preview` | POST | Lightweight MP4 preview (`file`, `start_seconds`, `duration_seconds` up to 30); source duration in `X-Video-Duration` |
 | `/api/jobs` | GET | My job history (`status`, `limit`, `offset`) |
 | `/api/jobs/{id}` | GET | Job status + metrics |
 | `/api/jobs/{id}` | DELETE | Delete the job and its files; 204 (409 while it is processing) |

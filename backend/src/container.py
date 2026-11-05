@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import Engine, text
 
@@ -16,16 +17,19 @@ from src.infrastructure.storage.posts import SqlPostRepository
 from src.infrastructure.storage.sql import SqlJobRepository
 from src.infrastructure.storage.users import SqlUserRepository
 from src.infrastructure.upscale import RealESRGANUpscaler, UpscalerConfig
+from src.infrastructure.upscale.remote import RemoteMPSUpscaler
 from src.infrastructure.upscale.stub import StubUpscaler
 
 logger = logging.getLogger(__name__)
 
 
-def build_upscalers(settings: UpscaleSettings) -> dict[Mode, Upscaler]:
+def build_upscalers(
+    settings: UpscaleSettings, *, token_path: Path | None = None
+) -> dict[Mode, Upscaler]:
     if settings.backend == "stub":
         return {mode: StubUpscaler(mode.scale) for mode in Mode}
 
-    return {
+    upscalers: dict[Mode, Upscaler] = {
         mode: RealESRGANUpscaler(
             UpscalerConfig(
                 device=settings.device,
@@ -36,6 +40,12 @@ def build_upscalers(settings: UpscaleSettings) -> dict[Mode, Upscaler]:
         )
         for mode in Mode
     }
+    if settings.mps_bridge_url and token_path is not None:
+        return {
+            mode: RemoteMPSUpscaler(upscaler, settings.mps_bridge_url, token_path)
+            for mode, upscaler in upscalers.items()
+        }
+    return upscalers
 
 
 @dataclass
@@ -52,7 +62,9 @@ class Container:
     def build(cls, settings: Settings) -> "Container":
         engine = create_db_engine(settings.database.url)
         sessions = create_session_factory(engine)
-        upscalers = build_upscalers(settings.upscale)
+        upscalers = build_upscalers(
+            settings.upscale, token_path=settings.storage.dir / "mps-bridge.token"
+        )
         service = UpscaleService(
             jobs=SqlJobRepository(sessions),
             storage=LocalFileStorage(settings.storage.dir),

@@ -3,6 +3,7 @@ import time
 from collections.abc import Mapping
 from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import UUID, uuid4
 
 from PIL import Image, UnidentifiedImageError
@@ -11,6 +12,12 @@ from src.core.config import ImageSettings, VideoSettings
 from src.features.upscale.domain import FileRole, Job, JobStatus, MediaFile, MediaKind, Mode
 from src.features.upscale.ports import FileStorage, JobRepository, Upscaler
 from src.features.upscale.quality import quality_metrics
+from src.features.upscale.video import (
+    create_video_preview,
+    probe_video,
+    upscale_video,
+    video_frame_range,
+)
 from src.shared import metrics
 from src.shared.errors import (
     InvalidMediaError,
@@ -25,6 +32,7 @@ logger = logging.getLogger(__name__)
 IMAGE_FORMATS = {"PNG", "JPEG", "WEBP", "BMP"}
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".webm", ".avi", ".mov"}
 MB = 1024 * 1024
+VIDEO_QUALITY_FRAME_INTERVAL = 30
 
 
 def fit_to_output(image: Image.Image, max_size: int, scale: int) -> Image.Image:
@@ -105,13 +113,46 @@ class UpscaleService:
             height=height,
         )
 
-    def create_video_job(self, filename: str, data: bytes, mode: Mode, *, owner_id: UUID) -> Job:
+    def create_video_job(
+        self,
+        filename: str,
+        data: bytes,
+        mode: Mode,
+        max_size: int = 1920,
+        *,
+        owner_id: UUID,
+        start_seconds: float = 0,
+        end_seconds: float | None = None,
+    ) -> Job:
         suffix = Path(filename).suffix.lower()
         if suffix not in VIDEO_EXTENSIONS:
             raise UnsupportedMediaTypeError(f"Unsupported video extension: {suffix or 'none'}")
         return self._create_job(
-            MediaKind.VIDEO, filename, data, mode, max_size=1920, owner_id=owner_id
+            MediaKind.VIDEO,
+            filename,
+            data,
+            mode,
+            max_size=max_size,
+            owner_id=owner_id,
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
         )
+
+    def preview_video(
+        self, filename: str, data: bytes, start_seconds: float, duration_seconds: float
+    ) -> tuple[bytes, float]:
+        suffix = Path(filename).suffix.lower()
+        if suffix not in VIDEO_EXTENSIONS:
+            raise UnsupportedMediaTypeError(f"Unsupported video extension: {suffix or 'none'}")
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / f"source{suffix}"
+            output = Path(directory) / "preview.mp4"
+            source.write_bytes(data)
+            info = probe_video(source)
+            video_frame_range(info, start_seconds, None)
+            duration = min(duration_seconds, info.duration_seconds - start_seconds)
+            create_video_preview(source, output, start_seconds, duration)
+            return output.read_bytes(), info.duration_seconds
 
     def get_job(self, job_id: UUID, owner_id: UUID) -> Job:
         job = self._jobs.get(job_id)
@@ -166,17 +207,16 @@ class UpscaleService:
         started = time.perf_counter()
         metrics.JOBS_IN_PROGRESS.labels(kind=job.kind.value).inc()
         try:
-            if job.kind is MediaKind.VIDEO:
-                # TODO: frame-wise enhance() + ffmpeg re-mux (src/cli.py has the pipeline).
-                self._finish(job, JobStatus.FAILED, error="Video upscaling is not implemented yet")
-            else:
-                try:
-                    self._upscale_image(job)
-                except Exception as exc:
-                    logger.exception("Job %s failed", job.id)
-                    self._finish(job, JobStatus.FAILED, error=str(exc))
+            try:
+                if job.kind is MediaKind.VIDEO:
+                    self._upscale_video(job)
                 else:
-                    self._finish(job, JobStatus.DONE)
+                    self._upscale_image(job)
+            except Exception as exc:
+                logger.exception("Job %s failed", job.id)
+                self._finish(job, JobStatus.FAILED, error=str(exc))
+            else:
+                self._finish(job, JobStatus.DONE)
         finally:
             metrics.JOBS_IN_PROGRESS.labels(kind=job.kind.value).dec()
             self._observe(job, time.perf_counter() - started)
@@ -187,7 +227,7 @@ class UpscaleService:
         input_megapixels = megapixels(job.input)
         output_megapixels = megapixels(output)
         throughput = (
-            output_megapixels / duration_seconds
+            output_megapixels * job.metrics.get("frame_count", 1) / duration_seconds
             if output_megapixels is not None and duration_seconds > 0
             else None
         )
@@ -237,6 +277,69 @@ class UpscaleService:
             # Analytics must never fail an otherwise good upscale.
             logger.exception("Quality metrics failed for job %s", job.id)
 
+    def _upscale_video(self, job: Job) -> None:
+        upscaler = self._upscalers[job.mode]
+        processing_seconds = 0.0
+        frame_index = 0
+        quality_samples = 0
+        quality_totals: dict[str, float] = {}
+
+        def enhance(frame: Image.Image) -> Image.Image:
+            nonlocal processing_seconds, frame_index, quality_samples
+            started = time.perf_counter()
+            source = fit_to_output(frame, job.max_size, upscaler.scale)
+            result = upscaler.enhance(source)
+            processing_seconds += time.perf_counter() - started
+            # Match image-job quality metrics, averaging the first and every 30th frame.
+            # Sampling keeps analytics affordable without retaining decoded frames in memory.
+            if frame_index % VIDEO_QUALITY_FRAME_INTERVAL == 0:
+                try:
+                    sample = quality_metrics(source, result)
+                except Exception:
+                    logger.exception("Quality metrics failed for video job %s", job.id)
+                else:
+                    for name, value in sample.items():
+                        quality_totals[name] = quality_totals.get(name, 0.0) + value
+                    quality_samples += 1
+            frame_index += 1
+            return result
+
+        output = self._storage.output_path(job.id, ".mp4")
+        info = upscale_video(
+            job.input.path,
+            output,
+            enhance,
+            start_seconds=job.start_seconds,
+            end_seconds=job.end_seconds,
+        )
+        job.output = MediaFile(
+            role=FileRole.OUTPUT,
+            path=output,
+            size_bytes=output.stat().st_size,
+            width=info.width,
+            height=info.height,
+        )
+        output_mp = info.width * info.height / 1e6
+        job.metrics.update(
+            processing_seconds=round(processing_seconds, 4),
+            frame_count=float(info.frames),
+            fps=info.fps,
+            duration_seconds=info.frames / info.fps,
+            input_size_bytes=float(job.input.size_bytes),
+            output_size_bytes=float(job.output.size_bytes),
+            input_megapixels=round(megapixels(job.input) or 0, 4),
+            output_megapixels=round(output_mp, 4),
+            quality_sample_count=float(quality_samples),
+        )
+        if quality_samples:
+            job.metrics.update(
+                {name: round(total / quality_samples, 6) for name, total in quality_totals.items()}
+            )
+        if processing_seconds > 0:
+            job.metrics["megapixels_per_second"] = round(
+                output_mp * info.frames / processing_seconds, 4
+            )
+
     def _create_job(
         self,
         kind: MediaKind,
@@ -248,10 +351,20 @@ class UpscaleService:
         owner_id: UUID,
         width: int | None = None,
         height: int | None = None,
+        start_seconds: float = 0,
+        end_seconds: float | None = None,
     ) -> Job:
         self._require_mode(mode)
         job_id = uuid4()
         path = self._storage.save_input(job_id, filename, data)
+        if kind is MediaKind.VIDEO:
+            try:
+                info = probe_video(path)
+                video_frame_range(info, start_seconds, end_seconds)
+            except Exception:
+                self._storage.delete(path)
+                raise
+            width, height = info.width, info.height
         job = Job(
             id=job_id,
             owner_id=owner_id,
@@ -259,6 +372,8 @@ class UpscaleService:
             mode=mode,
             original_filename=filename,
             max_size=max_size,
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
             input=MediaFile(
                 role=FileRole.INPUT, path=path, size_bytes=len(data), width=width, height=height
             ),

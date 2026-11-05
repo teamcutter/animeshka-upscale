@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
+from .device import resolve_device
 from .rrdb import RRDBNet
 
 logger = logging.getLogger(__name__)
@@ -25,33 +26,11 @@ class RealESRGANUpscaler:
     def __init__(self, config: UpscalerConfig):
         self.config = config
         self.scale = config.scale
-        self.device = self._resolve_device(config.device)
+        self.device = resolve_device(config.device)
         self.tile_size = config.tile_size
         self.tile_pad = 10
         self.model_path = config.model_path
         self.model: RRDBNet | None = None
-
-    @staticmethod
-    def _resolve_device(req: str) -> str:
-        req = req.lower()
-        if req == "auto":
-            if torch.cuda.is_available():
-                return "cuda"
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return "mps"
-            return "cpu"
-        if req == "cuda" and not torch.cuda.is_available():
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                logger.warning("CUDA not available, falling back to mps")
-                return "mps"
-            logger.warning("CUDA not available, falling back to cpu")
-            return "cpu"
-        if req == "mps" and not (
-            hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
-        ):
-            logger.warning("MPS not available, falling back to cpu")
-            return "cpu"
-        return req
 
     @property
     def weights_path(self) -> Path:
