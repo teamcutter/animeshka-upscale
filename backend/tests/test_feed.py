@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from src.app import create_app
 from src.features.auth.api.deps import SESSION_COOKIE
-from src.features.feed.domain import FeedCursor
+from src.features.feed.domain import Cursor
 from src.features.upscale.domain import now_utc
 from tests.conftest import SettingsFactory, make_png, register
 
@@ -25,14 +25,6 @@ def new_user(client: TestClient, email: str, name: str) -> str:
     """Registers another account on the same client and returns its session token."""
     client.cookies.clear()
     register(client, email=email, name=name)
-    token = client.cookies.get(SESSION_COOKIE)
-    assert token
-    return token
-
-
-@pytest.fixture
-def author(client: TestClient) -> str:
-    """Session token of the user the `client` fixture registered."""
     token = client.cookies.get(SESSION_COOKIE)
     assert token
     return token
@@ -64,11 +56,13 @@ def test_published_job_is_in_everyones_feed(client: TestClient, author: str) -> 
     assert item["author"] == {"name": "Анимешка"}
     assert "anime@example.com" not in str(item)  # the author's email is never shown
     assert item["mine"] is False
+    assert item["kind"] == "image"
     assert item["mode"] == "2k"
+    assert (item["like_count"], item["liked"], item["comment_count"]) == (0, False, 0)
     assert (item["input"]["width"], item["output"]["width"]) == (64, 128)
     assert client.get(f"/api/feed/{item['id']}").json() == item
 
-    image = client.get(item["image_url"])
+    image = client.get(item["media_url"])
     assert image.status_code == 200
     assert image.headers["content-type"] == "image/png"
     assert "attachment" not in image.headers.get("content-disposition", "")
@@ -99,7 +93,7 @@ def test_unpublish_removes_from_feed_but_keeps_job(client: TestClient) -> None:
     assert response.json()["published"] is False
     assert feed(client)["items"] == []
     assert client.get(f"/api/feed/{item['id']}").status_code == 404
-    assert client.get(item["image_url"]).status_code == 404
+    assert client.get(item["media_url"]).status_code == 404
     # Still in my history and downloadable for me.
     assert client.get(f"/api/jobs/{job_id}").json()["published"] is False
     assert client.get(f"/api/jobs/{job_id}/result").status_code == 200
@@ -114,7 +108,7 @@ def test_deleting_job_removes_its_post(client: TestClient) -> None:
 
     assert client.delete(f"/api/jobs/{job_id}").status_code == 204
     assert feed(client)["items"] == []
-    assert client.get(item["image_url"]).status_code == 404
+    assert client.get(item["media_url"]).status_code == 404
 
 
 def test_cannot_publish_someone_elses_job(client: TestClient, author: str) -> None:
@@ -133,7 +127,7 @@ def test_cannot_publish_someone_elses_job(client: TestClient, author: str) -> No
     assert len(feed(client)["items"]) == 1
 
 
-def test_only_finished_images_can_be_published(make_settings: SettingsFactory) -> None:
+def test_only_finished_jobs_can_be_published(make_settings: SettingsFactory) -> None:
     # No embedded worker: uploads stay queued.
     with TestClient(create_app(make_settings(embedded=False))) as client:
         register(client)
@@ -144,12 +138,30 @@ def test_only_finished_images_can_be_published(make_settings: SettingsFactory) -
         assert feed(client)["items"] == []
 
 
-def test_video_cannot_be_published(client: TestClient, video_factory) -> None:
+def test_video_can_be_published(client: TestClient, video_factory) -> None:
     response = client.post(
         "/api/upscale/video", files={"file": ("clip.mp4", video_factory(), "video/mp4")}
     )
     job_id = response.json()["id"]
-    assert client.post(f"/api/jobs/{job_id}/publish").status_code == 409
+    assert client.get(f"/api/jobs/{job_id}").json()["status"] == "done"
+    assert client.post(f"/api/jobs/{job_id}/publish").status_code == 200
+    item = feed(client)["items"][0]
+    assert item["kind"] == "video"
+    media = client.get(item["media_url"])
+    assert media.status_code == 200
+    assert media.headers["content-type"] == "video/mp4"
+
+
+def test_old_job_can_be_published_later(client: TestClient) -> None:
+    """Any finished job from my history can be shared, not only the one just uploaded."""
+    old, new = upload(client), upload(client)
+    assert client.post(f"/api/jobs/{new}/publish").status_code == 200
+    assert client.post(f"/api/jobs/{old}/publish").status_code == 200
+    # Feed order is by publication time, not by upload time.
+    items = feed(client)["items"]
+    assert len(items) == 2
+    published = {job["id"]: job["published_at"] for job in client.get("/api/jobs").json()}
+    assert items[0]["published_at"] == published[old]
 
 
 def test_feed_pages_newest_first(client: TestClient) -> None:
@@ -175,8 +187,8 @@ def test_feed_pages_newest_first(client: TestClient) -> None:
 
 
 def test_feed_cursor_round_trip() -> None:
-    cursor = FeedCursor(published_at=now_utc(), post_id=uuid4())
-    assert FeedCursor.decode(cursor.encode()) == cursor
+    cursor = Cursor(at=now_utc(), id=uuid4())
+    assert Cursor.decode(cursor.encode()) == cursor
 
 
 @pytest.mark.parametrize(
@@ -193,7 +205,7 @@ def test_feed_needs_login(client: TestClient) -> None:
     item = feed(client)["items"][0]
 
     client.cookies.clear()
-    for url in ("/api/feed", f"/api/feed/{item['id']}", item["image_url"], item["original_url"]):
+    for url in ("/api/feed", f"/api/feed/{item['id']}", item["media_url"], item["original_url"]):
         assert client.get(url).status_code == 401, url
     assert client.post(f"/api/jobs/{job_id}/publish").status_code == 401
     assert client.delete(f"/api/jobs/{job_id}/publish").status_code == 401

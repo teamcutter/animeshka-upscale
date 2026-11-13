@@ -20,6 +20,7 @@ from src.core.config import (
     VideoSettings,
     WorkerSettings,
 )
+from src.features.auth.api.deps import SESSION_COOKIE
 from src.infrastructure.db.engine import create_db_engine
 from src.infrastructure.db.models import Base
 
@@ -112,3 +113,11 @@ def video_factory(tmp_path: Path) -> Callable[..., bytes]:
         return path.read_bytes()
 
     return create
+
+
+@pytest.fixture
+def author(client: TestClient) -> str:
+    """Session token of the user the `client` fixture registered."""
+    token = client.cookies.get(SESSION_COOKIE)
+    assert token
+    return token

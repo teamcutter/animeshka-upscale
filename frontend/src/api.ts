@@ -25,6 +25,8 @@ export interface Job {
   metrics: Record<string, number>;
   result_url: string | null;
   error: string | null;
+  published: boolean;
+  published_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -180,6 +182,87 @@ export async function waitForJob(
     if (job.status === 'done' || job.status === 'failed') return job;
     await sleep(intervalMs, signal);
   }
+}
+
+// --- Public feed: publishing, likes, comments ---------------------------------------------
+
+export interface FeedItem {
+  id: string;
+  author: { name: string };
+  mine: boolean;
+  kind: MediaKind;
+  mode: Mode;
+  input: FileInfo;
+  output: FileInfo;
+  media_url: string;
+  original_url: string;
+  like_count: number;
+  liked: boolean;
+  comment_count: number;
+  published_at: string;
+}
+
+export interface Page<T> {
+  items: T[];
+  next_cursor: string | null;
+}
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  author: { name: string };
+  mine: boolean;
+  can_delete: boolean;
+  text: string;
+  created_at: string;
+}
+
+/** Share any finished job (image or video, new or old) in the public feed. */
+export async function publishJob(id: string): Promise<Job> {
+  const { data } = await http.post<Job>(`/api/jobs/${id}/publish`);
+  return data;
+}
+
+/** Take the job out of the feed (its likes and comments are removed too). */
+export async function unpublishJob(id: string): Promise<Job> {
+  const { data } = await http.delete<Job>(`/api/jobs/${id}/publish`);
+  return data;
+}
+
+export async function getFeed(
+  cursor?: string | null, limit = 12, signal?: AbortSignal,
+): Promise<Page<FeedItem>> {
+  const { data } = await http.get<Page<FeedItem>>('/api/feed', {
+    params: { limit, ...(cursor ? { cursor } : {}) },
+    signal,
+  });
+  return data;
+}
+
+/** Like or unlike; the server answers with the post's new counts. */
+export async function setLiked(postId: string, liked: boolean): Promise<FeedItem> {
+  const url = `/api/feed/${postId}/like`;
+  const { data } = liked ? await http.put<FeedItem>(url) : await http.delete<FeedItem>(url);
+  return data;
+}
+
+export async function getComments(
+  postId: string, cursor?: string | null, signal?: AbortSignal,
+): Promise<Page<Comment>> {
+  const { data } = await http.get<Page<Comment>>(`/api/feed/${postId}/comments`, {
+    params: { limit: 50, ...(cursor ? { cursor } : {}) },
+    signal,
+  });
+  return data;
+}
+
+export async function addComment(postId: string, text: string): Promise<Comment> {
+  const { data } = await http.post<Comment>(`/api/feed/${postId}/comments`, { text });
+  return data;
+}
+
+export async function deleteComment(postId: string, commentId: string): Promise<void> {
+  await http.delete(`/api/feed/${postId}/comments/${commentId}`);
 }
 
 export function isAbort(error: unknown): boolean {

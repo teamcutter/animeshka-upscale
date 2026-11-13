@@ -13,7 +13,11 @@ from src.features.upscale.service import UpscaleService
 from src.infrastructure.db.engine import create_db_engine, create_session_factory
 from src.infrastructure.db.migrate import upgrade_database
 from src.infrastructure.storage.files import LocalFileStorage
-from src.infrastructure.storage.posts import SqlPostRepository
+from src.infrastructure.storage.posts import (
+    SqlCommentRepository,
+    SqlLikeRepository,
+    SqlPostRepository,
+)
 from src.infrastructure.storage.sql import SqlJobRepository
 from src.infrastructure.storage.users import SqlUserRepository
 from src.infrastructure.upscale import RealESRGANUpscaler, UpscalerConfig
@@ -78,7 +82,12 @@ class Container:
             upscalers=upscalers,
             upscale_service=service,
             auth_service=AuthService(SqlUserRepository(sessions), settings.auth),
-            feed_service=FeedService(SqlPostRepository(sessions), service),
+            feed_service=FeedService(
+                SqlPostRepository(sessions),
+                service,
+                likes=SqlLikeRepository(sessions),
+                comments=SqlCommentRepository(sessions),
+            ),
         )
 
     def startup(self, *, load_models: bool = True) -> None:
