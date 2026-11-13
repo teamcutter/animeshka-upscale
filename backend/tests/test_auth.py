@@ -115,6 +115,7 @@ def test_expired_session_is_rejected(client: TestClient) -> None:
         ("post", "/api/upscale/video/preview"),
         ("get", "/api/jobs/00000000-0000-0000-0000-000000000000"),
         ("get", "/api/jobs/00000000-0000-0000-0000-000000000000/result"),
+        ("get", "/api/jobs/00000000-0000-0000-0000-000000000000/original"),
         ("delete", "/api/jobs/00000000-0000-0000-0000-000000000000"),
     ],
 )

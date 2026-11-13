@@ -107,6 +107,7 @@ def test_video_external_worker(make_settings: SettingsFactory, video_factory):
         assert response.status_code == 202
         job_id = response.json()["id"]
         assert client.get(f"/api/jobs/{job_id}").json()["status"] == "queued"
+        assert client.get(f"/api/jobs/{job_id}/original").status_code == 409
         assert run(settings, once=True) == 1
         job = client.get(f"/api/jobs/{job_id}").json()
         assert job["status"] == "done", job["error"]
@@ -292,3 +293,74 @@ def test_preview_rejects_out_of_bounds_range(client: TestClient, video_factory):
         data={"start_seconds": "5"},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("extension", ["mp4", "avi"])
+def test_comparison_original_is_aligned_cached_and_private(
+    client: TestClient, video_factory, tmp_path: Path, monkeypatch, extension
+):
+    data = video_factory(duration=2, fps="30000/1001", audio=True)
+    source_path = tmp_path / "clip.mp4"
+    if extension == "avi":
+        source_path = tmp_path / "clip.avi"
+        subprocess.run(
+            [
+                "ffmpeg", "-v", "error", "-y", "-i", str(tmp_path / "clip.mp4"),
+                "-c:v", "mpeg4", "-q:v", "2", "-c:a", "pcm_s16le", str(source_path),
+            ],
+            check=True, capture_output=True, timeout=30,
+        )
+        data = source_path.read_bytes()
+    response = client.post(
+        "/api/upscale/video",
+        files={"file": (source_path.name, data, "application/octet-stream")},
+        data={"start_seconds": "0.51", "end_seconds": "1.01"},
+    )
+    job = client.get(f"/api/jobs/{response.json()['id']}").json()
+    assert job["status"] == "done", job["error"]
+    original = client.get(job["original_url"])
+    assert original.status_code == 200
+    assert original.headers["content-type"] == "video/mp4"
+    preview_path = tmp_path / "comparison.mp4"
+    preview_path.write_bytes(original.content)
+    streams = probe(preview_path)["streams"]
+    video = next(s for s in streams if s["codec_type"] == "video")
+    assert video["codec_name"] == "h264"
+    assert (video["width"], video["height"]) == (64, 48)
+    assert int(video["nb_frames"]) == job["metrics"]["frame_count"] == 15
+    assert float(video["duration"]) == pytest.approx(job["metrics"]["duration_seconds"], abs=0.001)
+    assert any(s["codec_type"] == "audio" for s in streams)
+    source, comparison = cv2.VideoCapture(str(source_path)), cv2.VideoCapture(str(preview_path))
+    try:
+        source.set(cv2.CAP_PROP_POS_FRAMES, 16)
+        ok, expected = source.read()
+        assert ok
+        ok, actual = comparison.read()
+        assert ok
+        assert np.abs(actual.astype(float) - expected.astype(float)).mean() < 10
+    finally:
+        source.release()
+        comparison.release()
+
+    def unexpected_conversion(*args, **kwargs):
+        raise AssertionError("Comparison source must be cached")
+
+    monkeypatch.setattr("src.features.upscale.service.upscale_video", unexpected_conversion)
+    partial = client.get(job["original_url"], headers={"Range": "bytes=0-31"})
+    assert partial.status_code == 206
+    assert partial.content == original.content[:32]
+    assert client.post(f"/api/jobs/{job['id']}/publish").status_code == 200
+    published = client.get("/api/feed").json()["items"][0]
+    owner_cookies = dict(client.cookies)
+    client.cookies.clear()
+    register(client, email="viewer@example.com")
+    assert client.get(job["original_url"]).status_code == 404
+    assert client.get(published["original_url"]).content == original.content
+    client.cookies.clear()
+    client.cookies.update(owner_cookies)
+    assert client.delete(f"/api/jobs/{job['id']}").status_code == 204
+    root = client.app.state.container.settings.storage.dir
+    cache = root / "outputs" / f"{job['id']}.original.mp4"
+    assert not cache.exists()
+    assert client.get(job["original_url"]).status_code == 404
+    assert client.get(published["original_url"]).status_code == 404

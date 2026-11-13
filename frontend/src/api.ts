@@ -24,6 +24,7 @@ export interface Job {
   output: FileInfo | null;
   metrics: Record<string, number>;
   result_url: string | null;
+  original_url: string;
   error: string | null;
   published: boolean;
   published_at: string | null;

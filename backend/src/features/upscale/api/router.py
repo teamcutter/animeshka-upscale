@@ -138,3 +138,8 @@ def delete_job(job_id: UUID, user: CurrentUser, service: Service) -> None:
 @router.get("/jobs/{job_id}/result", response_class=FileResponse)
 def get_job_result(job_id: UUID, user: CurrentUser, service: Service) -> FileResponse:
     return FileResponse(service.get_result_path(job_id, user.id))
+
+
+@router.get("/jobs/{job_id}/original", response_class=FileResponse)
+def get_job_original(job_id: UUID, user: CurrentUser, service: Service) -> FileResponse:
+    return FileResponse(service.get_original_path(service.get_job(job_id, user.id)))

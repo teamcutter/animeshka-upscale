@@ -1,10 +1,23 @@
+import { useState } from 'react';
+import { errorMessage, logout } from '../api';
 import { useAuth } from '../context/useAuth';
 
 export default function ProfileTab() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [error, setError] = useState('');
   
-  const handleLogout = () => {
-    window.location.reload();
+  const handleLogout = async () => {
+    setError('');
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      setUser(null);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -17,11 +30,11 @@ export default function ProfileTab() {
       <div className="border border-zinc-800 bg-zinc-900 p-8">
         <div className="flex items-center space-x-6 mb-8 border-b border-zinc-800 pb-8">
           <div className="w-20 h-20 bg-zinc-950 border-2 border-orange-500 flex items-center justify-center text-orange-500 font-black text-3xl uppercase shadow-[4px_4px_0px_#ea580c]">
-            {(user as any)?.username?.charAt(0) || 'U'}
+            {user?.name.charAt(0) || 'U'}
           </div>
           <div>
-            <h3 className="text-2xl font-black text-white uppercase">{(user as any)?.username || 'GUEST'}</h3>
-            <p className="text-zinc-500 font-mono text-sm mt-1">ID: {(user as any)?.id || 'UNKNOWN'}</p>
+            <h3 className="text-2xl font-black text-white uppercase">{user?.name || 'GUEST'}</h3>
+            <p className="text-zinc-500 font-mono text-sm mt-1">ID: {user?.id || 'UNKNOWN'}</p>
           </div>
         </div>
         
@@ -37,11 +50,15 @@ export default function ProfileTab() {
         </div>
 
         <div className="mt-10 pt-6 border-t border-zinc-800">
+          {error && (
+            <p role="alert" className="mb-4 text-red-500 font-mono text-sm">{error}</p>
+          )}
           <button 
             onClick={handleLogout}
-            className="w-full bg-zinc-950 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white font-bold font-mono py-4 uppercase transition-colors"
+            disabled={isLoggingOut}
+            className="w-full bg-zinc-950 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white font-bold font-mono py-4 uppercase transition-colors disabled:opacity-60 disabled:cursor-wait"
           >
-            Завершить сеанс
+            {isLoggingOut ? 'Завершение сеанса...' : 'Завершить сеанс'}
           </button>
         </div>
       </div>

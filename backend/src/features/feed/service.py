@@ -91,6 +91,8 @@ class FeedService:
     def media_path(self, post_id: UUID, viewer_id: UUID, role: FileRole) -> Path:
         """The upscaled result (OUTPUT) or the original upload (INPUT) of a published post."""
         job = self.get_item(post_id, viewer_id).job
+        if role is FileRole.INPUT:
+            return self._upscale.get_original_path(job)
         media = job.output if role is FileRole.OUTPUT else job.input
         if media is None:
             raise NotFoundError(f"Post {post_id} has no {role} file")
