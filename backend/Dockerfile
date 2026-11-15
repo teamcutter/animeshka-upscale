@@ -12,15 +12,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Dependencies first so code changes don't reinstall torch.
+# torch + CUDA wheels are ~3 GB: on a slow connection uv's default 30 s timeout and
+# parallel downloads fail mid-way, so allow 10 min per request and fewer at once.
 COPY pyproject.toml README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --no-install-project
+    UV_HTTP_TIMEOUT=600 UV_CONCURRENT_DOWNLOADS=4 uv sync --no-dev --no-install-project
 
 COPY alembic.ini config.yml ./
 COPY migrations ./migrations
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev
+    UV_HTTP_TIMEOUT=600 uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000

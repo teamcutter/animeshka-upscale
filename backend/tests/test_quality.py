@@ -30,3 +30,12 @@ def test_sharpness_compares_with_plain_resize() -> None:
     sharp = source.resize((64, 64), Image.Resampling.NEAREST)
     metrics = quality_metrics(source, sharp)
     assert metrics["sharpness_output"] > metrics["sharpness_bicubic"]
+
+
+def test_input_sharpness_drops_after_blur() -> None:
+    image = checkerboard()
+    blurred = image.filter(ImageFilter.GaussianBlur(2))
+    assert (
+        quality_metrics(image, image)["sharpness_input"]
+        > quality_metrics(blurred, blurred)["sharpness_input"]
+    )

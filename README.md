@@ -439,6 +439,7 @@ on the luma channel by `backend/src/features/upscale/quality.py`:
 | `input_megapixels`, `output_megapixels` | Size of what the model got / returned |
 | `psnr_db`, `ssim` | Result shrunk back to the input size vs the input: faithfulness to the original (PSNR capped at 100) |
 | `sharpness_bicubic`, `sharpness_output` | Variance of the Laplacian of a plain bicubic resize vs the model output: detail added over a resize |
+| `sharpness_input` | Same measure on the input itself; known before processing, a feature of the QoP regression |
 
 Analytics adds its own rows the same way (e.g. `qop`, `vmaf`); no schema change is needed. One
 row per job for Grafana or pandas (works on PostgreSQL and SQLite):
@@ -458,6 +459,10 @@ JOIN metrics m ON m.job_id = j.id
 WHERE j.status = 'done'
 GROUP BY j.id, j.user_id, j.mode, j.created_at, fi.width, fi.height, fo.width, fo.height;
 ```
+
+**QoP regression (Sprint 6)**: `analytics/` — dataset runner, feature export
+(`analytics/export_features.sql`), multiple linear regression of QoP vs Ridge / Lasso / naive
+mean with R2, MAE, RMSE, VIF and k-fold CV. See [analytics/README.md](analytics/README.md).
 
 * **Objective**: PSNR, SSIM (scikit-image / pyiqa), VMAF (`libvmaf` if available) before/after
 * **Subjective**: linear regression on 32 metric features → QoP/MOS 1–5 (sprint 1 model from Maksim)
@@ -480,10 +485,18 @@ Every finished job is measured in two places:
   `processing_seconds`, `input_megapixels`, `output_megapixels`, `megapixels_per_second`,
   `input_size_bytes`, `output_size_bytes`.
 
-Endpoints: API `http://localhost:8000/api/metrics`, worker `http://localhost:9101/metrics`,
-Prometheus `http://localhost:9090`, Grafana `http://localhost:3000`. Provisioned dashboards
+Endpoints: API `http://localhost:8000/api/metrics`, Prometheus `http://localhost:9090`,
+Grafana `http://localhost:3000`. The worker serves `:9101/metrics` too, but in Docker Compose
+that port is only visible inside the compose network (Prometheus scrapes `worker:9101`); open
+`http://localhost:9090/targets` to check it. When the worker runs locally (`uv run python -m
+src.worker`), it is `http://localhost:9101/metrics`. Provisioned dashboards
 (`deploy/grafana/provisioning/dashboards/`, folder *Animeshka*):
-**Animeshka — Pipeline metrics (Prometheus)** and **Animeshka — Jobs & media sizes (PostgreSQL)**.
+**Animeshka — Pipeline metrics (Prometheus)**, **Animeshka — Jobs & media sizes (PostgreSQL)**
+and **Animeshka — Quality & QoP (PostgreSQL)**.
+
+Two kinds of throughput are shown, and they differ on purpose: Prometheus
+`upscale_megapixels_per_second` divides by the whole job wall time (reading, saving, ffmpeg),
+while `megapixels_per_second` in the `metrics` table divides by model inference time only.
 
 ## Team (Sprint 1, 01.09–14.09.2026)
 

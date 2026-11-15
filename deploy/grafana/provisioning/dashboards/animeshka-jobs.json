@@ -35,37 +35,37 @@
     {
       "id": 3,
       "type": "bargauge",
-      "title": "Avg processing time by mode (s)",
+      "title": "Avg processing time by mode, images (s)",
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 6 },
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "options": { "displayMode": "gradient", "orientation": "horizontal" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"avg seconds\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE m.name = 'processing_seconds' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"avg seconds\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE j.kind = 'image' AND j.status = 'done' AND m.name = 'processing_seconds' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
       ]
     },
     {
       "id": 4,
       "type": "bargauge",
-      "title": "Avg throughput by mode (megapixels / s)",
+      "title": "Avg throughput by mode, images (megapixels / s)",
       "gridPos": { "h": 7, "w": 8, "x": 8, "y": 6 },
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
       "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
       "options": { "displayMode": "gradient", "orientation": "horizontal" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"megapixels / s\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE m.name = 'megapixels_per_second' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"megapixels / s\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE j.kind = 'image' AND j.status = 'done' AND m.name = 'megapixels_per_second' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
       ]
     },
     {
       "id": 5,
       "type": "bargauge",
-      "title": "Avg output size by mode (megapixels)",
+      "title": "Avg output size by mode, images (megapixels)",
       "gridPos": { "h": 7, "w": 8, "x": 16, "y": 6 },
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" },
       "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
       "options": { "displayMode": "gradient", "orientation": "horizontal" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"output megapixels\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE m.name = 'output_megapixels' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
+        { "refId": "A", "datasource": { "type": "grafana-postgresql-datasource", "uid": "animeshka-postgres" }, "format": "table", "editorMode": "code", "rawSql": "SELECT j.mode AS \"mode\", avg(m.value) AS \"output megapixels\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE j.kind = 'image' AND j.status = 'done' AND m.name = 'output_megapixels' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode" }
       ]
     },
     {

@@ -5,7 +5,9 @@ An upscaler has no ground truth, so the metrics compare what is available:
 * psnr_db / ssim - the result shrunk back to the input size vs the input: how faithful the
   upscale stays to the original (the model must not invent or shift content);
 * sharpness_bicubic / sharpness_output - variance of the Laplacian of a plain bicubic resize
-  vs the model output at the same size: how much detail the model adds over a resize.
+  vs the model output at the same size: how much detail the model adds over a resize;
+* sharpness_input - the same measure on the input itself. It is known before processing,
+  so the QoP regression (analytics/) can use it as a feature without data leakage.
 
 All metrics are computed on the luma (Y) channel, as is usual for super-resolution papers.
 """
@@ -60,4 +62,5 @@ def quality_metrics(source: Image.Image, result: Image.Image) -> dict[str, float
         "ssim": round(ssim(source_luma, shrunk_luma), 6),
         "sharpness_bicubic": round(sharpness(_luma(bicubic)), 4),
         "sharpness_output": round(sharpness(_luma(result)), 4),
+        "sharpness_input": round(sharpness(source_luma), 4),
     }

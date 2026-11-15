@@ -1,0 +1,499 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Success rate (all jobs)",
+      "description": "Indicator 3: share of finished jobs that ended in 'done'",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "SELECT 100.0 * count(*) FILTER (WHERE status = 'done') / NULLIF(count(*) FILTER (WHERE status IN ('done', 'failed')), 0) AS \"success %\" FROM jobs WHERE $__timeFilter(created_at)"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 1
+    },
+    {
+      "type": "stat",
+      "title": "Avg QoP (images)",
+      "description": "QoP = 0.4*norm(PSNR) + 0.4*SSIM + 0.2*norm(sharpness_output/sharpness_bicubic), min-max over the jobs in the selected time range (research memo, Sprint 5). The trained model in analytics/ uses bounds from its training split.",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 3,
+          "min": 0,
+          "max": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.7
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "WITH q AS (SELECT j.id, j.created_at, j.mode, max(m.value) FILTER (WHERE m.name = 'psnr_db') AS psnr, max(m.value) FILTER (WHERE m.name = 'ssim') AS ssim, max(m.value) FILTER (WHERE m.name = 'sharpness_output') / NULLIF(max(m.value) FILTER (WHERE m.name = 'sharpness_bicubic'), 0) AS gain FROM jobs j JOIN metrics m ON m.job_id = j.id WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) GROUP BY j.id, j.created_at, j.mode), g AS (SELECT * FROM q WHERE psnr IS NOT NULL AND ssim IS NOT NULL AND gain IS NOT NULL), n AS (SELECT *, 0.4 * COALESCE((psnr - min(psnr) OVER ()) / NULLIF(max(psnr) OVER () - min(psnr) OVER (), 0), 0.5) + 0.4 * LEAST(GREATEST(ssim, 0), 1) + 0.2 * COALESCE((gain - min(gain) OVER ()) / NULLIF(max(gain) OVER () - min(gain) OVER (), 0), 0.5) AS qop FROM g) SELECT avg(qop) AS \"QoP\" FROM n"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "Avg PSNR (images)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dB",
+          "decimals": 2,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "SELECT avg(m.value) AS \"PSNR, dB\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) AND m.name = 'psnr_db'"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "Avg SSIM (images)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 3,
+          "min": 0,
+          "max": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "SELECT avg(m.value) AS \"SSIM\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) AND m.name = 'ssim'"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 4
+    },
+    {
+      "type": "table",
+      "title": "Indicator 1 — throughput by mode (images)",
+      "description": "Average megapixels per second of model inference, 2K vs 4K",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "SELECT j.mode AS \"mode\", count(*) AS \"jobs\", round(avg(m.value)::numeric, 2) AS \"avg MP/s\" FROM jobs j JOIN metrics m ON m.job_id = j.id AND m.name = 'megapixels_per_second' WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) GROUP BY j.mode ORDER BY j.mode"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 5
+    },
+    {
+      "type": "table",
+      "title": "Indicator 2 — quality by mode (images)",
+      "description": "Average PSNR / SSIM / QoP, 2K vs 4K",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "WITH q AS (SELECT j.id, j.created_at, j.mode, max(m.value) FILTER (WHERE m.name = 'psnr_db') AS psnr, max(m.value) FILTER (WHERE m.name = 'ssim') AS ssim, max(m.value) FILTER (WHERE m.name = 'sharpness_output') / NULLIF(max(m.value) FILTER (WHERE m.name = 'sharpness_bicubic'), 0) AS gain FROM jobs j JOIN metrics m ON m.job_id = j.id WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) GROUP BY j.id, j.created_at, j.mode), g AS (SELECT * FROM q WHERE psnr IS NOT NULL AND ssim IS NOT NULL AND gain IS NOT NULL), n AS (SELECT *, 0.4 * COALESCE((psnr - min(psnr) OVER ()) / NULLIF(max(psnr) OVER () - min(psnr) OVER (), 0), 0.5) + 0.4 * LEAST(GREATEST(ssim, 0), 1) + 0.2 * COALESCE((gain - min(gain) OVER ()) / NULLIF(max(gain) OVER () - min(gain) OVER (), 0), 0.5) AS qop FROM g) SELECT mode AS \"mode\", count(*) AS \"jobs\", round(avg(psnr)::numeric, 2) AS \"avg PSNR, dB\", round(avg(ssim)::numeric, 3) AS \"avg SSIM\", round(avg(gain)::numeric, 2) AS \"sharpness gain\", round(avg(qop)::numeric, 3) AS \"avg QoP\" FROM n GROUP BY mode ORDER BY mode"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 6
+    },
+    {
+      "type": "table",
+      "title": "Indicator 3 — success rate and time by kind",
+      "description": "Share of successful jobs and average processing time, photos vs videos",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "SELECT j.kind AS \"kind\", count(*) AS \"total\", round(100.0 * count(*) FILTER (WHERE j.status = 'done') / NULLIF(count(*), 0), 1) AS \"success %\", round(avg(m.value)::numeric, 2) AS \"avg seconds\" FROM jobs j LEFT JOIN metrics m ON m.job_id = j.id AND m.name = 'processing_seconds' WHERE j.status IN ('done', 'failed') AND $__timeFilter(j.created_at) GROUP BY j.kind ORDER BY j.kind"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "QoP per job",
+      "description": "QoP = 0.4*norm(PSNR) + 0.4*SSIM + 0.2*norm(sharpness_output/sharpness_bicubic), min-max over the jobs in the selected time range (research memo, Sprint 5). The trained model in analytics/ uses bounds from its training split.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 6,
+            "showPoints": "always"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "time_series",
+          "editorMode": "code",
+          "rawSql": "WITH q AS (SELECT j.id, j.created_at, j.mode, max(m.value) FILTER (WHERE m.name = 'psnr_db') AS psnr, max(m.value) FILTER (WHERE m.name = 'ssim') AS ssim, max(m.value) FILTER (WHERE m.name = 'sharpness_output') / NULLIF(max(m.value) FILTER (WHERE m.name = 'sharpness_bicubic'), 0) AS gain FROM jobs j JOIN metrics m ON m.job_id = j.id WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) GROUP BY j.id, j.created_at, j.mode), g AS (SELECT * FROM q WHERE psnr IS NOT NULL AND ssim IS NOT NULL AND gain IS NOT NULL), n AS (SELECT *, 0.4 * COALESCE((psnr - min(psnr) OVER ()) / NULLIF(max(psnr) OVER () - min(psnr) OVER (), 0), 0.5) + 0.4 * LEAST(GREATEST(ssim, 0), 1) + 0.2 * COALESCE((gain - min(gain) OVER ()) / NULLIF(max(gain) OVER () - min(gain) OVER (), 0), 0.5) AS qop FROM g) SELECT created_at AS \"time\", qop AS \"value\", mode AS \"metric\" FROM n ORDER BY created_at"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "PSNR per job (dB)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 6,
+            "showPoints": "always"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "time_series",
+          "editorMode": "code",
+          "rawSql": "SELECT j.created_at AS \"time\", m.value AS \"value\", j.mode AS \"metric\" FROM metrics m JOIN jobs j ON j.id = m.job_id WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) AND m.name = 'psnr_db' ORDER BY j.created_at"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 9
+    },
+    {
+      "type": "table",
+      "title": "Per-job quality (input features + QoP)",
+      "description": "Same columns as analytics/export_features.sql: the data the QoP regression learns from",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "animeshka-postgres"
+          },
+          "format": "table",
+          "editorMode": "code",
+          "rawSql": "WITH q AS (SELECT j.id, j.created_at, j.mode, j.original_filename, fi.width, fi.height, fi.size_bytes, max(m.value) FILTER (WHERE m.name = 'sharpness_input') AS sharpness_input, max(m.value) FILTER (WHERE m.name = 'psnr_db') AS psnr, max(m.value) FILTER (WHERE m.name = 'ssim') AS ssim, max(m.value) FILTER (WHERE m.name = 'sharpness_output') / NULLIF(max(m.value) FILTER (WHERE m.name = 'sharpness_bicubic'), 0) AS gain FROM jobs j JOIN files fi ON fi.job_id = j.id AND fi.role = 'input' JOIN metrics m ON m.job_id = j.id WHERE j.kind = 'image' AND j.status = 'done' AND $__timeFilter(j.created_at) GROUP BY j.id, j.created_at, j.mode, j.original_filename, fi.width, fi.height, fi.size_bytes), g AS (SELECT * FROM q WHERE psnr IS NOT NULL AND ssim IS NOT NULL AND gain IS NOT NULL), n AS (SELECT *, 0.4 * COALESCE((psnr - min(psnr) OVER ()) / NULLIF(max(psnr) OVER () - min(psnr) OVER (), 0), 0.5) + 0.4 * LEAST(GREATEST(ssim, 0), 1) + 0.2 * COALESCE((gain - min(gain) OVER ()) / NULLIF(max(gain) OVER () - min(gain) OVER (), 0), 0.5) AS qop FROM g) SELECT created_at AS \"time\", original_filename AS \"file\", mode, width, height, size_bytes AS \"input bytes\", round(sharpness_input::numeric, 1) AS \"input sharpness\", round(psnr::numeric, 2) AS \"PSNR\", round(ssim::numeric, 4) AS \"SSIM\", round(gain::numeric, 2) AS \"sharpness gain\", round(qop::numeric, 3) AS \"QoP\" FROM n ORDER BY created_at DESC"
+        }
+      ],
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "animeshka-postgres"
+      },
+      "id": 10
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "animeshka",
+    "postgres",
+    "analytics"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Animeshka — Quality & QoP (PostgreSQL)",
+  "uid": "animeshka-quality",
+  "version": 1,
+  "weekStart": ""
+}
