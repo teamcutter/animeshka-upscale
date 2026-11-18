@@ -128,3 +128,32 @@ class PostRow(Base):
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     job: Mapped[JobRow] = relationship()
+
+
+class LikeRow(Base):
+    """One like of a post by a user (the primary key makes it at most one)."""
+
+    __tablename__ = "likes"
+
+    post_id: Mapped[UUID] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Indexed: deleting a user cascades here, and PostgreSQL doesn't index foreign keys itself.
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class CommentRow(Base):
+    """A comment under a post; removed with the post (unpublish, job or account deletion)."""
+
+    __tablename__ = "comments"
+    # A post's thread is read oldest first and paged by (created_at, id).
+    __table_args__ = (Index("ix_comments_post_id_created_at_id", "post_id", "created_at", "id"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    post_id: Mapped[UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

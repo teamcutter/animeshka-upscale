@@ -314,7 +314,9 @@ Tables (`migrations/versions/`): `jobs` (status, mode, kind, timestamps), `files
 path, size, resolution), `metrics` (`job_id`, `name`, `value` — e.g. `processing_seconds`,
 `output_megapixels`, `megapixels_per_second`, `input_size_bytes`; analytics adds PSNR/SSIM/QoP
 here), `users` and `sessions` (accounts, migration `0002`), `posts` (jobs shared in the feed:
-`job_id` unique, `published_at`, migration `0003`). Deleting a job or a user removes its posts
+`job_id` unique, `published_at`, migration `0003`), `likes` (`post_id` + `user_id` primary key)
+and `comments` (`post_id`, `user_id`, `text`, `created_at`; both migration `0005`). Deleting a job
+or a user removes its posts, and unpublishing a post removes its likes and comments
 (`ON DELETE CASCADE`). Grafana reads them through the provisioned PostgreSQL datasource.
 
 ```bash
@@ -393,13 +395,20 @@ curl -b jar "http://localhost:8000/api/jobs?status=done&limit=20&offset=0"
 # delete a job with its files
 curl -b jar -X DELETE http://localhost:8000/api/jobs/<id>
 
-# share a finished image in the public feed / take it back
+# share any finished job (image or video, new or old) in the public feed / take it back
 curl -b jar -X POST http://localhost:8000/api/jobs/<id>/publish
 curl -b jar -X DELETE http://localhost:8000/api/jobs/<id>/publish
 
 # the feed: everyone's published works, newest first; pass next_cursor for the next page
 curl -b jar "http://localhost:8000/api/feed?limit=20"
 curl -b jar "http://localhost:8000/api/feed?limit=20&cursor=<next_cursor>"
+
+# like / unlike a post, comment on it, read the thread (oldest first), delete a comment
+curl -b jar -X PUT http://localhost:8000/api/feed/<post_id>/like
+curl -b jar -X DELETE http://localhost:8000/api/feed/<post_id>/like
+curl -b jar -H 'Content-Type: application/json' -d '{"text":"nice"}'   http://localhost:8000/api/feed/<post_id>/comments
+curl -b jar "http://localhost:8000/api/feed/<post_id>/comments?limit=50"
+curl -b jar -X DELETE http://localhost:8000/api/feed/<post_id>/comments/<comment_id>
 
 curl -b jar -c jar -X POST http://localhost:8000/api/auth/logout
 ```
@@ -417,12 +426,16 @@ curl -b jar -c jar -X POST http://localhost:8000/api/auth/logout
 | `/api/jobs/{id}` | GET | Job status + metrics |
 | `/api/jobs/{id}` | DELETE | Delete the job and its files; 204 (409 while it is processing) |
 | `/api/jobs/{id}/result` | GET | Download upscaled file (when `done`) |
-| `/api/jobs/{id}/publish` | POST | Share my finished image in the feed; returns the job with `published: true` (409 if not `done` or not an image, idempotent) |
-| `/api/jobs/{id}/publish` | DELETE | Take my job out of the feed; the job and files stay |
+| `/api/jobs/{id}/publish` | POST | Share any finished job of mine (image or video, also an old one from history); returns the job with `published: true` (409 if not `done`, idempotent) |
+| `/api/jobs/{id}/publish` | DELETE | Take my job out of the feed with its likes and comments; the job and files stay |
 | `/api/feed` | GET | Published works of all users, newest first: `{items, next_cursor}` (`limit` 1–50, `cursor`) |
-| `/api/feed/{post_id}` | GET | One feed item: author name, `mine`, mode, input/output size, `image_url`, `original_url` |
-| `/api/feed/{post_id}/image` | GET | Upscaled image of a published post (shown inline, not as a download) |
+| `/api/feed/{post_id}` | GET | One feed item: author name, `mine`, `kind`, mode, input/output size, `media_url`, `original_url`, `like_count`, `liked`, `comment_count` |
+| `/api/feed/{post_id}/media` | GET | Upscaled image (PNG) or video (MP4) of a published post (shown inline, not as a download) |
 | `/api/feed/{post_id}/original` | GET | Original upload of a published post (for a before/after view) |
+| `/api/feed/{post_id}/like` | PUT / DELETE | Like / unlike the post (idempotent, anyone logged in, the author too); returns the feed item with new counts |
+| `/api/feed/{post_id}/comments` | GET | Comments of the post, oldest first: `{items, next_cursor}`; each has author name, `mine`, `can_delete`, `text`, `created_at` |
+| `/api/feed/{post_id}/comments` | POST | Comment on any post: `{"text": "..."}` (1–1000 chars after trimming) → 201 |
+| `/api/feed/{post_id}/comments/{comment_id}` | DELETE | Delete a comment: its author or the post's owner (403 for others) → 204 |
 | `/api/metrics` | GET | Prometheus metrics |
 | `/health` | GET | Health check (503 if the database is down) + `modes` available on this server |
 | `/docs` | GET | Swagger UI |
