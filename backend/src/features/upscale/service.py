@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Lock
 from uuid import UUID, uuid4
 
 from PIL import Image, UnidentifiedImageError
@@ -66,6 +67,7 @@ class UpscaleService:
         self._upscalers = upscalers
         self._image = image_settings
         self._video = video_settings
+        self._original_lock = Lock()
 
     @property
     def image_limit_bytes(self) -> int:
@@ -177,13 +179,38 @@ class UpscaleService:
             raise JobNotReadyError(f"Job {job_id} is {job.status}")
         return job.output.path
 
+    def get_original_path(self, job: Job) -> Path:
+        """Comparison source for an already authorized job, aligned with the result."""
+        if job.kind is MediaKind.IMAGE:
+            return job.input.path
+        if job.status is not JobStatus.DONE or job.output is None:
+            raise JobNotReadyError(f"Job {job.id} is {job.status}")
+        output = self._storage.output_path(job.id, ".original.mp4")
+        # Cache the browser-compatible selected interval, including for older AVI jobs.
+        # Use the same frame selection and encoder as the result, without enhancement.
+        with self._original_lock:
+            if not output.is_file():
+                with TemporaryDirectory(dir=output.parent) as directory:
+                    temporary = Path(directory) / "original.mp4"
+                    upscale_video(
+                        job.input.path,
+                        temporary,
+                        lambda frame: frame,
+                        start_seconds=job.start_seconds,
+                        end_seconds=job.end_seconds,
+                    )
+                    temporary.replace(output)
+        return output
+
     def delete_job(self, job_id: UUID, owner_id: UUID) -> None:
         job = self.get_job(job_id, owner_id)
         if not self._jobs.delete(job_id):
             raise JobNotReadyError(f"Job {job_id} is being processed, try again later")
-        for media in (job.input, job.output):
-            if media is not None:
-                self._storage.delete(media.path)
+        with self._original_lock:
+            for media in (job.input, job.output):
+                if media is not None:
+                    self._storage.delete(media.path)
+            self._storage.delete(self._storage.output_path(job.id, ".original.mp4"))
         logger.info("Deleted job %s", job_id)
 
     def process_job(self, job_id: UUID) -> None:

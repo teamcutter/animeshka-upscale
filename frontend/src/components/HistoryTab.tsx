@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download, Loader2, Send, Undo2 } from 'lucide-react';
+import { Download, Eye, Loader2, Send, Undo2 } from 'lucide-react';
 
 import {
   downloadName,
@@ -11,6 +11,7 @@ import {
   type Job,
 } from '../api';
 import { formatDate } from '../hooks';
+import JobPreviewModal from './JobPreviewModal';
 
 const PAGE = 20;
 
@@ -28,6 +29,7 @@ export default function HistoryTab() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState<Job | null>(null);
   const controller = useRef<AbortController | null>(null);
 
   const fetchPage = async (offset: number) => {
@@ -134,6 +136,9 @@ export default function HistoryTab() {
                 </span>
                 {done && (
                   <>
+                    <button onClick={() => setPreview(job)} className="flex items-center gap-1.5 px-3 py-1 border border-zinc-700 text-zinc-300 hover:border-orange-500 hover:text-orange-500 text-xs font-bold uppercase">
+                      <Eye size={14} /> Сравнить
+                    </button>
                     <button
                       onClick={() => void togglePublish(job)}
                       disabled={busyId === job.id}
@@ -183,6 +188,7 @@ export default function HistoryTab() {
           </button>
         </div>
       )}
+      {preview && <JobPreviewModal key={preview.id} job={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDropzone, type FileRejection } from 'react-dropzone';
-import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
 import { Download, Loader2, Send, Undo2 } from 'lucide-react';
 
 import {
@@ -18,6 +17,7 @@ import {
 } from '../api';
 import { formatBytes } from '../hooks';
 import VideoSelection from './VideoSelection';
+import MediaComparison from './MediaComparison';
 
 type Phase = 'idle' | 'selecting' | 'uploading' | 'queued' | 'processing' | 'done' | 'error';
 
@@ -256,20 +256,15 @@ export default function MainTab({ health }: { health: Health | null }) {
 
       {phase === 'done' && job?.result_url && (
         <div className="space-y-6">
-          <div className="border border-zinc-800 bg-black h-[480px] relative">
-            {job.kind === 'image' && sourceUrl ? (
-              <ReactCompareSlider
-                itemOne={<ReactCompareSliderImage src={sourceUrl} alt="До" style={{ objectFit: 'contain' }} />}
-                itemTwo={<ReactCompareSliderImage src={job.result_url} alt="После" style={{ objectFit: 'contain' }} />}
-                className="h-full w-full"
-              />
-            ) : (
-              <video src={job.result_url} controls playsInline className="h-full w-full object-contain" />
-            )}
-            <span className="absolute top-3 right-3 bg-orange-500 text-black px-2 py-0.5 font-mono text-[10px] font-bold pointer-events-none">
-              {job.mode.toUpperCase()} · {job.output?.width}×{job.output?.height}
-            </span>
-          </div>
+          <MediaComparison
+            key={job.id}
+            kind={job.kind}
+            originalUrl={job.original_url}
+            resultUrl={job.result_url}
+            input={job.input}
+            output={job.output}
+            className="border border-zinc-800 h-[540px]"
+          />
 
           <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-sm">
             {[

@@ -30,6 +30,7 @@ class JobResponse(BaseModel):
     output: FileInfo | None
     metrics: dict[str, float]
     result_url: str | None
+    original_url: str
     error: str | None
     published: bool
     published_at: datetime | None
@@ -52,6 +53,7 @@ class JobResponse(BaseModel):
             output=FileInfo.from_media(job.output) if job.output else None,
             metrics=job.metrics,
             result_url=f"/api/jobs/{job.id}/result" if done else None,
+            original_url=f"/api/jobs/{job.id}/original",
             error=job.error,
             published=job.published_at is not None,
             published_at=job.published_at,

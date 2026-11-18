@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
 import { Loader2, Send, Trash2, X } from 'lucide-react';
 
 import {
@@ -13,6 +12,7 @@ import {
 } from '../api';
 import { formatDate } from '../hooks';
 import LikeButton from './LikeButton';
+import MediaComparison from './MediaComparison';
 
 const MAX_COMMENT = 1000;
 
@@ -123,27 +123,7 @@ export default function PostModal({ item, onChange, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
         className="bg-zinc-950 border border-zinc-800 w-full max-w-6xl max-h-[92vh] grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] overflow-hidden shadow-[8px_8px_0px_#ea580c]"
       >
-        <div className="bg-black min-h-[280px] lg:min-h-[560px] relative">
-          {item.kind === 'video' ? (
-            <video src={item.media_url} controls playsInline className="h-full w-full max-h-[92vh] object-contain" />
-          ) : (
-            <ReactCompareSlider
-              itemOne={<ReactCompareSliderImage src={item.original_url} alt="До" style={{ objectFit: 'contain' }} />}
-              itemTwo={<ReactCompareSliderImage src={item.media_url} alt="После" style={{ objectFit: 'contain' }} />}
-              className="h-full w-full max-h-[92vh]"
-            />
-          )}
-          {item.kind === 'image' && (
-            <>
-              <span className="absolute top-3 left-3 bg-black/80 border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-300 pointer-events-none">
-                ДО · {item.input.width}×{item.input.height}
-              </span>
-              <span className="absolute top-3 right-3 bg-orange-500 text-black px-2 py-0.5 font-mono text-[10px] font-bold pointer-events-none">
-                ПОСЛЕ · {item.output.width}×{item.output.height}
-              </span>
-            </>
-          )}
-        </div>
+        <MediaComparison kind={item.kind} originalUrl={item.original_url} resultUrl={item.media_url} input={item.input} output={item.output} className="h-[45vh] min-h-[280px] lg:h-full lg:min-h-[560px]" />
 
         <aside className="flex flex-col min-h-0 max-h-[92vh] border-t lg:border-t-0 lg:border-l border-zinc-800">
           <header className="flex items-start justify-between gap-3 p-5 border-b border-zinc-800">
