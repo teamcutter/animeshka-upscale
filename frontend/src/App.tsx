@@ -6,11 +6,22 @@ import FeedTab from './components/FeedTab';
 import AuthScreen from './components/AuthScreen';
 import FallingLeaves from './components/FallingLeaves';
 import WelcomeTab from './components/WelcomeTab';
+import ModelsTab from './components/ModelsTab';
 import { useAuth } from './context/useAuth';
 import { useHealth } from './hooks';
 
+type Tab = 'welcome' | 'main' | 'feed' | 'history' | 'models' | 'profile';
+const TABS: Tab[] = ['welcome', 'main', 'feed', 'history', 'models', 'profile'];
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'welcome' | 'main' | 'feed' | 'history' | 'profile'>('welcome');
+  const [activeTab, setTab] = useState<Tab>(() => {
+    const tab = window.location.hash.slice(1) as Tab;
+    return TABS.includes(tab) ? tab : 'welcome';
+  });
+  function setActiveTab(tab: Tab) {
+    setTab(tab);
+    window.history.replaceState(null, '', `#${tab}`);
+  }
   const { user, isLoading } = useAuth();
   const { health } = useHealth();
 
@@ -40,7 +51,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-orange-500 selection:text-black">
       <header className="border-b border-zinc-800 bg-zinc-950 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-16 flex flex-wrap items-center justify-between">
           
           <div className="flex-1 flex items-center">
             <button 
@@ -51,18 +62,18 @@ export default function App() {
             </button>
           </div>
           
-          <nav className="flex-none flex space-x-2">
-            {['main', 'feed', 'history'].map(tab => (
+          <nav aria-label="Основная навигация" className="order-3 w-full justify-center md:order-none md:w-auto flex-none flex space-x-1">
+            {(['main', 'feed', 'history', 'models'] as const).map(tab => (
               <button 
                 key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`px-5 py-5 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+                onClick={() => setActiveTab(tab)}
+                className={`px-2 sm:px-5 py-5 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
                   activeTab === tab 
                     ? 'border-orange-500 text-orange-500 bg-orange-500/10' 
                     : 'border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900'
                 }`}
               >
-                {tab === 'main' ? 'Главная' : tab === 'feed' ? 'Лента' : 'Мои работы'}
+                {tab === 'main' ? 'Главная' : tab === 'feed' ? 'Лента' : tab === 'models' ? 'Модели' : 'Мои работы'}
               </button>
             ))}
           </nav>
@@ -90,6 +101,7 @@ export default function App() {
         {activeTab === 'main' && <MainTab health={health} />}
         {activeTab === 'feed' && <FeedTab />}
         {activeTab === 'history' && <HistoryTab />}
+        {activeTab === 'models' && <ModelsTab />}
         {activeTab === 'profile' && <ProfileTab />}
       </main>
     </div>

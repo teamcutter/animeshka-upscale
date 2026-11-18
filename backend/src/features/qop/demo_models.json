@@ -1,0 +1,263 @@
+{
+  "version": 1,
+  "source": "demo",
+  "created_at": "2026-11-18T18:37:09.248208+00:00",
+  "target": "qop",
+  "rows": 120,
+  "train_images": 96,
+  "test_images": 24,
+  "best_model": "OLS",
+  "models": [
+    {
+      "name": "Naive mean",
+      "intercept": 0.6571934100407907,
+      "terms": [],
+      "metrics": {
+        "R2_train": 0.0,
+        "adj_R2_train": 0.0,
+        "R2_test": -0.023231264072173463,
+        "MAE_test": 0.11849185383790461,
+        "RMSE_test": 0.14185086947722508,
+        "R2_cv_mean": -0.04375776413204879,
+        "R2_cv_std": 0.044111162225151164,
+        "RMSE_cv_mean": 0.13148194161504295
+      }
+    },
+    {
+      "name": "OLS",
+      "intercept": 0.8259090605348502,
+      "terms": [
+        {
+          "feature": "input_megapixels",
+          "mean": 1.00832646875,
+          "scale": 0.727741612500274,
+          "coefficient": -0.013861460394017826
+        },
+        {
+          "feature": "log_input_bytes",
+          "mean": 13.768113851184909,
+          "scale": 1.020745577905455,
+          "coefficient": -0.011467058426860363
+        },
+        {
+          "feature": "log_sharpness_input",
+          "mean": 5.253840070664334,
+          "scale": 0.6599650703828249,
+          "coefficient": 0.013954643961482684
+        },
+        {
+          "feature": "aspect_ratio",
+          "mean": 1.1203612345597236,
+          "scale": 0.31615529399652026,
+          "coefficient": 0.014688489514716569
+        },
+        {
+          "feature": "mode_4k",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.03341557623619507
+        },
+        {
+          "feature": "content_type",
+          "category": "landscape",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.23956922330937805
+        },
+        {
+          "feature": "content_type",
+          "category": "noise",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.3324161362177113
+        },
+        {
+          "feature": "content_type",
+          "category": "portrait",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.11469119888704339
+        },
+        {
+          "feature": "content_type",
+          "category": "text",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.1008486382148704
+        }
+      ],
+      "metrics": {
+        "R2_train": 0.7340116030268057,
+        "adj_R2_train": 0.7061756079947272,
+        "R2_test": 0.7981300046169166,
+        "MAE_test": 0.050425777214261315,
+        "RMSE_test": 0.06300586641747373,
+        "R2_cv_mean": 0.6470185716855238,
+        "R2_cv_std": 0.1190968619952141,
+        "RMSE_cv_mean": 0.07364286701075178
+      }
+    },
+    {
+      "name": "Ridge",
+      "intercept": 0.8175965060920183,
+      "terms": [
+        {
+          "feature": "input_megapixels",
+          "mean": 1.00832646875,
+          "scale": 0.727741612500274,
+          "coefficient": -0.015319244930215456
+        },
+        {
+          "feature": "log_input_bytes",
+          "mean": 13.768113851184909,
+          "scale": 1.020745577905455,
+          "coefficient": -0.010276411612073825
+        },
+        {
+          "feature": "log_sharpness_input",
+          "mean": 5.253840070664334,
+          "scale": 0.6599650703828249,
+          "coefficient": 0.012561536639181454
+        },
+        {
+          "feature": "aspect_ratio",
+          "mean": 1.1203612345597236,
+          "scale": 0.31615529399652026,
+          "coefficient": 0.014350468362374923
+        },
+        {
+          "feature": "mode_4k",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.03336368184037931
+        },
+        {
+          "feature": "content_type",
+          "category": "landscape",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.22951114540107828
+        },
+        {
+          "feature": "content_type",
+          "category": "noise",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.3183860774446667
+        },
+        {
+          "feature": "content_type",
+          "category": "portrait",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.10563079873847268
+        },
+        {
+          "feature": "content_type",
+          "category": "text",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.09193173467665747
+        }
+      ],
+      "metrics": {
+        "R2_train": 0.7330606437033191,
+        "adj_R2_train": 0.7051251296722711,
+        "R2_test": 0.7989540369335406,
+        "MAE_test": 0.051054278175996316,
+        "RMSE_test": 0.06287714010150063,
+        "R2_cv_mean": 0.6336805790527108,
+        "R2_cv_std": 0.11493667784253794,
+        "RMSE_cv_mean": 0.07530850761799283
+      }
+    },
+    {
+      "name": "Lasso",
+      "intercept": 0.8250989784778551,
+      "terms": [
+        {
+          "feature": "input_megapixels",
+          "mean": 1.00832646875,
+          "scale": 0.727741612500274,
+          "coefficient": -0.01397846405005044
+        },
+        {
+          "feature": "log_input_bytes",
+          "mean": 13.768113851184909,
+          "scale": 1.020745577905455,
+          "coefficient": -0.011344259727865211
+        },
+        {
+          "feature": "log_sharpness_input",
+          "mean": 5.253840070664334,
+          "scale": 0.6599650703828249,
+          "coefficient": 0.01382861995248622
+        },
+        {
+          "feature": "aspect_ratio",
+          "mean": 1.1203612345597236,
+          "scale": 0.31615529399652026,
+          "coefficient": 0.014622462872093516
+        },
+        {
+          "feature": "mode_4k",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.03332092738043313
+        },
+        {
+          "feature": "content_type",
+          "category": "landscape",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.23868770054944885
+        },
+        {
+          "feature": "content_type",
+          "category": "noise",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.33126625558812545
+        },
+        {
+          "feature": "content_type",
+          "category": "portrait",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.11375469698427645
+        },
+        {
+          "feature": "content_type",
+          "category": "text",
+          "mean": 0.0,
+          "scale": 1.0,
+          "coefficient": -0.0999798824038943
+        }
+      ],
+      "metrics": {
+        "R2_train": 0.7340036978680872,
+        "adj_R2_train": 0.7061668755519568,
+        "R2_test": 0.798134671028502,
+        "MAE_test": 0.05049911877430719,
+        "RMSE_test": 0.06300513819383766,
+        "R2_cv_mean": 0.6379900176141111,
+        "R2_cv_std": 0.09903403866890596,
+        "RMSE_cv_mean": 0.07532225542741917
+      }
+    }
+  ],
+  "training_max_sizes": [
+    2048
+  ],
+  "training_modes": [
+    "2k",
+    "4k"
+  ],
+  "content_types": [
+    "anime",
+    "landscape",
+    "noise",
+    "portrait",
+    "text"
+  ]
+}

@@ -11,6 +11,7 @@ from src.container import Container
 from src.core.config import Settings
 from src.features.auth.api.router import router as auth_router
 from src.features.feed.api.router import router as feed_router
+from src.features.qop.router import router as qop_router
 from src.features.upscale.api.router import router as upscale_router
 from src.shared.errors import AppError
 
@@ -27,8 +28,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # With an external worker the API never runs the model, so it doesn't load it.
         container.startup(load_models=settings.worker.embedded)
-        yield
-        container.shutdown()
+        container.qop.start()
+        try:
+            yield
+        finally:
+            container.shutdown()
 
     app = FastAPI(title=settings.app.title, version="0.2.0", lifespan=lifespan)
     app.state.container = container
@@ -57,5 +61,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(upscale_router)
     app.include_router(feed_router)
+    app.include_router(qop_router)
     Instrumentator().instrument(app).expose(app, endpoint="/api/metrics", include_in_schema=False)
     return app

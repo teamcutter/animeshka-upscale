@@ -305,10 +305,23 @@ def test_comparison_original_is_aligned_cached_and_private(
         source_path = tmp_path / "clip.avi"
         subprocess.run(
             [
-                "ffmpeg", "-v", "error", "-y", "-i", str(tmp_path / "clip.mp4"),
-                "-c:v", "mpeg4", "-q:v", "2", "-c:a", "pcm_s16le", str(source_path),
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                str(tmp_path / "clip.mp4"),
+                "-c:v",
+                "mpeg4",
+                "-q:v",
+                "2",
+                "-c:a",
+                "pcm_s16le",
+                str(source_path),
             ],
-            check=True, capture_output=True, timeout=30,
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
         data = source_path.read_bytes()
     response = client.post(

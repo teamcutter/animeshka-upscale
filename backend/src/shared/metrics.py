@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 # Latency buckets in seconds, from a small 2K frame on a fast GPU to a large
 # 4K frame on CPU.
-DURATION_BUCKETS = (0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300)
+# Upper buckets cover long video jobs (several minutes on CPU).
+DURATION_BUCKETS = (0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 1200, 1800)
 MEGAPIXEL_BUCKETS = (0.1, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64)
 BYTE_BUCKETS = (
     64 * 1024,
@@ -28,7 +29,9 @@ BYTE_BUCKETS = (
     64 * 1024**2,
     256 * 1024**2,
 )
-THROUGHPUT_BUCKETS = (0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10)
+# The stub backend and a GPU easily exceed 10 MP/s; without higher buckets every
+# observation lands in +Inf and histogram_quantile() flat-lines at the last bound.
+THROUGHPUT_BUCKETS = (0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500)
 
 KIND = "kind"
 MODE = "mode"

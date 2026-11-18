@@ -3,6 +3,47 @@
 import axios, { isAxiosError, isCancel } from 'axios';
 
 export type Mode = '2k' | '4k';
+export type QopSource = 'trained' | 'demo';
+
+export interface QopModel {
+  name: string;
+  metrics: Record<string, number | null>;
+}
+
+export interface QopCatalog {
+  available: boolean;
+  source: QopSource;
+  target?: 'qop' | 'psnr_db';
+  created_at?: string;
+  rows?: number;
+  train_images?: number;
+  test_images?: number;
+  best_model?: string;
+  training_max_sizes?: number[];
+  training_modes?: Mode[];
+  content_types?: string[];
+  models?: QopModel[];
+  automatic?: {
+    state: 'pending' | 'disabled' | 'collecting' | 'insufficient_data' | 'training' | 'ready' | 'error';
+    completed_images: number;
+    usable_jobs: number;
+    distinct_images: number;
+    min_images: number;
+    missing_quality: number;
+    missing_files: number;
+    backfilled_jobs: number;
+    last_checked: string | null;
+    last_trained: string | null;
+  };
+}
+
+export interface QopPrediction {
+  source: QopSource;
+  target: 'qop' | 'psnr_db';
+  width: number;
+  height: number;
+  predictions: { mode: Mode; model: string; value: number }[];
+}
 export type JobStatus = 'queued' | 'processing' | 'done' | 'failed';
 
 export interface FileInfo {
@@ -50,6 +91,24 @@ export interface User {
 
 // The session is an HttpOnly cookie set by the server; the browser sends it on its own.
 const http = axios.create({ baseURL: '/', withCredentials: true });
+
+export async function getQopModels(source: QopSource, signal?: AbortSignal): Promise<QopCatalog> {
+  const { data } = await http.get<QopCatalog>('/api/qop/models', { params: { source }, signal });
+  return data;
+}
+
+export async function predictQop(
+  source: QopSource, file: File, contentType: string, maxSize: number, signal?: AbortSignal,
+): Promise<QopPrediction> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('content_type', contentType);
+  form.append('max_size', String(maxSize));
+  const { data } = await http.post<QopPrediction>('/api/qop/predict', form, {
+    params: { source }, signal,
+  });
+  return data;
+}
 
 export async function getMe(signal?: AbortSignal): Promise<User> {
   const { data } = await http.get<User>('/api/auth/me', { signal });
