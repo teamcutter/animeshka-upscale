@@ -76,6 +76,12 @@ class AuthSettings(BaseModel):
     cookie_secure: bool = False
 
 
+class QopSettings(BaseModel):
+    enabled: bool = True
+    poll_interval: float = Field(default=30.0, ge=1)
+    min_images: int = Field(default=10, ge=10)
+
+
 class LogSettings(BaseModel):
     level: str = "INFO"
     file: str | None = None
@@ -101,6 +107,7 @@ class Settings(BaseSettings):
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
+    qop: QopSettings = Field(default_factory=QopSettings)
     log: LogSettings = Field(default_factory=LogSettings)
 
     @classmethod

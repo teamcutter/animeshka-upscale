@@ -477,6 +477,14 @@ GROUP BY j.id, j.user_id, j.mode, j.created_at, fi.width, fi.height, fo.width, f
 (`analytics/export_features.sql`), multiple linear regression of QoP vs Ridge / Lasso / naive
 mean with R2, MAE, RMSE, VIF and k-fold CV. See [analytics/README.md](analytics/README.md).
 
+The **Модели** tab (`http://localhost:8080/#models`) compares the regression models,
+downloads their coefficients and predicts image quality before upscaling. The API reads
+finished image jobs from its configured database, backfills missing quality metrics from
+saved media, and automatically retrains when the dataset changes (at least 10 distinct
+images). The tab shows dataset counts and update status. No manual CSV export is needed.
+A labelled synthetic demo and an optional offline workflow for reports and manual labels
+are also available; see the analytics README.
+
 * **Objective**: PSNR, SSIM (scikit-image / pyiqa), VMAF (`libvmaf` if available) before/after
 * **Subjective**: linear regression on 32 metric features → QoP/MOS 1–5 (sprint 1 model from Maksim)
 * **Grafana**: PostgreSQL (per-job metrics) + Prometheus (time series); panels — before/after, metric tables, QoP gauge, degradation-vs-quality line, 2K vs 4K latency/throughput bar

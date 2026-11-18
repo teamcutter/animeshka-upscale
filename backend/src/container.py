@@ -7,6 +7,7 @@ from sqlalchemy import Engine, text
 from src.core.config import Settings, UpscaleSettings
 from src.features.auth.service import AuthService
 from src.features.feed.service import FeedService
+from src.features.qop.automatic import AutomaticQop
 from src.features.upscale.domain import Mode
 from src.features.upscale.ports import Upscaler
 from src.features.upscale.service import UpscaleService
@@ -60,6 +61,7 @@ class Container:
     upscale_service: UpscaleService
     auth_service: AuthService
     feed_service: FeedService
+    qop: AutomaticQop
     models_loaded: bool = False
 
     @classmethod
@@ -82,6 +84,7 @@ class Container:
             upscalers=upscalers,
             upscale_service=service,
             auth_service=AuthService(SqlUserRepository(sessions), settings.auth),
+            qop=AutomaticQop(sessions, settings.storage.dir, settings.qop),
             feed_service=FeedService(
                 SqlPostRepository(sessions),
                 service,
@@ -112,6 +115,7 @@ class Container:
             )
 
     def shutdown(self) -> None:
+        self.qop.stop()
         if self.models_loaded:
             for upscaler in self.upscalers.values():
                 upscaler.unload()

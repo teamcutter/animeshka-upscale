@@ -24,6 +24,10 @@ worker:
 metrics:
   enabled: true      # API serves /api/metrics; the worker binds worker_port for Prometheus
   worker_port: 9101
+qop:
+  enabled: true     # read saved job metrics, backfill missing image quality, retrain on changes
+  poll_interval: 30
+  min_images: 10
 auth:
   required: true     # false -> no login needed, requests run as a shared guest (local/dev only)
   session_days: 30

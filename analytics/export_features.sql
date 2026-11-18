@@ -6,6 +6,7 @@ SELECT
     j.created_at,
     j.original_filename                                             AS filename,
     j.mode,
+    j.max_size,
     fi.width                                                        AS width,
     fi.height                                                       AS height,
     fi.size_bytes                                                   AS input_bytes,
@@ -21,6 +22,6 @@ FROM jobs j
 JOIN files fi ON fi.job_id = j.id AND fi.role = 'input'
 LEFT JOIN metrics m ON m.job_id = j.id
 WHERE j.kind = 'image' AND j.status = 'done'
-GROUP BY j.id, j.created_at, j.original_filename, j.mode, fi.width, fi.height, fi.size_bytes
+GROUP BY j.id, j.created_at, j.original_filename, j.mode, j.max_size, fi.width, fi.height, fi.size_bytes
 HAVING max(m.value) FILTER (WHERE m.name = 'psnr_db') IS NOT NULL
 ORDER BY j.created_at;
