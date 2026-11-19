@@ -12,13 +12,14 @@ import {
 } from '../api';
 import { formatDate } from '../hooks';
 import JobPreviewModal from './JobPreviewModal';
+import PublishModal from './PublishModal';
 
 const PAGE = 20;
 
 const STATUS: Record<Job['status'], { label: string; className: string }> = {
-  done: { label: 'COMPLETED', className: 'text-green-500 border-green-500/30 bg-green-500/10' },
+  done: { label: 'COMPLETED', className: 'text-teal-400 border-teal-400/30 bg-teal-400/10' },
   failed: { label: 'FAILED', className: 'text-red-500 border-red-500/30 bg-red-500/10' },
-  processing: { label: 'PROCESSING', className: 'text-yellow-500 border-yellow-500/30 bg-yellow-500/10' },
+  processing: { label: 'PROCESSING', className: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10' },
   queued: { label: 'QUEUED', className: 'text-zinc-400 border-zinc-700 bg-zinc-800/40' },
 };
 
@@ -30,6 +31,8 @@ export default function HistoryTab() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<Job | null>(null);
+  const [publishTarget, setPublishTarget] = useState<Job | null>(null);
+  const [publishError, setPublishError] = useState('');
   const controller = useRef<AbortController | null>(null);
 
   const fetchPage = async (offset: number) => {
@@ -71,14 +74,34 @@ export default function HistoryTab() {
     return () => controller.current?.abort();
   }, []);
 
-  const togglePublish = async (job: Job) => {
-    setBusyId(job.id);
-    setError('');
+  const handlePublishAction = async (job: Job) => {
+    if (job.published) {
+      setBusyId(job.id);
+      setError('');
+      try {
+        const updated = await unpublishJob(job.id);
+        setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+      } catch (err) {
+        setError(errorMessage(err));
+      } finally {
+        setBusyId(null);
+      }
+      return;
+    }
+    setPublishError('');
+    setPublishTarget(job);
+  };
+
+  const handlePublishConfirm = async (caption: string) => {
+    if (!publishTarget) return;
+    setBusyId(publishTarget.id);
+    setPublishError('');
     try {
-      const updated = job.published ? await unpublishJob(job.id) : await publishJob(job.id);
+      const updated = await publishJob(publishTarget.id, caption);
       setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+      setPublishTarget(null);
     } catch (err) {
-      setError(errorMessage(err));
+      setPublishError(errorMessage(err));
     } finally {
       setBusyId(null);
     }
@@ -86,7 +109,7 @@ export default function HistoryTab() {
 
   return (
     <div className="space-y-8">
-      <div className="border-l-4 border-orange-500 pl-6 py-2">
+      <div className="border-l-4 border-teal-400 pl-6 py-2">
         <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Мои работы</h2>
         <p className="text-zinc-500 font-mono text-sm uppercase mt-1">USER_ARCHIVE</p>
       </div>
@@ -108,7 +131,7 @@ export default function HistoryTab() {
             <div
               key={job.id}
               className={`border bg-zinc-900 p-5 flex flex-col sm:flex-row sm:items-center justify-between transition-colors gap-4 ${
-                job.published ? 'border-orange-500/60' : 'border-zinc-800 hover:border-zinc-600'
+                job.published ? 'border-teal-400/60' : 'border-zinc-800 hover:border-zinc-600'
               }`}
             >
               <div className="flex items-center space-x-4 min-w-0">
@@ -123,7 +146,7 @@ export default function HistoryTab() {
                     {formatDate(job.created_at)} · {job.mode.toUpperCase()}
                   </div>
                   {job.published && job.published_at && (
-                    <div className="text-orange-500 font-mono text-[10px] mt-1 uppercase">
+                    <div className="text-teal-400 font-mono text-[10px] mt-1 uppercase">
                       В ленте с {formatDate(job.published_at)}
                     </div>
                   )}
@@ -136,16 +159,16 @@ export default function HistoryTab() {
                 </span>
                 {done && (
                   <>
-                    <button onClick={() => setPreview(job)} className="flex items-center gap-1.5 px-3 py-1 border border-zinc-700 text-zinc-300 hover:border-orange-500 hover:text-orange-500 text-xs font-bold uppercase">
+                    <button onClick={() => setPreview(job)} className="flex items-center gap-1.5 px-3 py-1 border border-zinc-700 text-zinc-300 hover:border-teal-400 hover:text-teal-400 text-xs font-bold uppercase">
                       <Eye size={14} /> Сравнить
                     </button>
                     <button
-                      onClick={() => void togglePublish(job)}
+                      onClick={() => void handlePublishAction(job)}
                       disabled={busyId === job.id}
                       className={`flex items-center gap-1.5 px-3 py-1 border text-xs font-bold uppercase transition-colors disabled:opacity-50 ${
                         job.published
                           ? 'border-zinc-700 text-zinc-300 hover:border-red-500 hover:text-red-500'
-                          : 'border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-black'
+                          : 'border-teal-400/70 text-teal-400 hover:bg-teal-400 hover:text-black'
                       }`}
                     >
                       {busyId === job.id ? (
@@ -174,7 +197,7 @@ export default function HistoryTab() {
       </div>
 
       {loading && (
-        <div className="flex justify-center py-6 text-orange-500">
+        <div className="flex justify-center py-6 text-teal-400">
           <Loader2 className="animate-spin" />
         </div>
       )}
@@ -182,13 +205,25 @@ export default function HistoryTab() {
         <div className="flex justify-center">
           <button
             onClick={loadMore}
-            className="border border-zinc-800 px-6 py-3 font-mono text-xs font-bold uppercase text-zinc-300 hover:border-orange-500 hover:text-orange-500 transition-colors"
+            className="border border-zinc-800 px-6 py-3 font-mono text-xs font-bold uppercase text-zinc-300 hover:border-teal-400 hover:text-teal-400 transition-colors"
           >
             Показать ещё
           </button>
         </div>
       )}
       {preview && <JobPreviewModal key={preview.id} job={preview} onClose={() => setPreview(null)} />}
+      {publishTarget && (
+        <PublishModal
+          title={publishTarget.filename}
+          submitting={busyId === publishTarget.id}
+          error={publishError}
+          onConfirm={handlePublishConfirm}
+          onClose={() => {
+            setPublishTarget(null);
+            setPublishError('');
+          }}
+        />
+      )}
     </div>
   );
 }

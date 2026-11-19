@@ -16,13 +16,16 @@ import MediaComparison from './MediaComparison';
 
 const MAX_COMMENT = 1000;
 
+interface FeedPost extends FeedItem {
+  caption?: string | null;
+}
+
 interface Props {
-  item: FeedItem;
+  item: FeedPost;
   onChange: (item: FeedItem) => void;
   onClose: () => void;
 }
 
-/** A post opened from the feed: the work full size, likes and the comment thread. */
 export default function PostModal({ item, onChange, onClose }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -53,7 +56,6 @@ export default function PostModal({ item, onChange, onClose }: Props) {
     void fetchPage(from);
   };
 
-  // The feed remounts this window per post (key={id}), so the thread loads once on mount.
   useEffect(() => {
     const request = new AbortController();
     controller.current = request;
@@ -111,6 +113,8 @@ export default function PostModal({ item, onChange, onClose }: Props) {
     }
   };
 
+  const caption = (item.caption ?? '').trim();
+
   return (
     <div
       className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
@@ -121,9 +125,16 @@ export default function PostModal({ item, onChange, onClose }: Props) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-zinc-950 border border-zinc-800 w-full max-w-6xl max-h-[92vh] grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] overflow-hidden shadow-[8px_8px_0px_#ea580c]"
+        className="bg-zinc-950 border border-zinc-800 w-full max-w-6xl max-h-[92vh] grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] overflow-hidden shadow-[8px_8px_0px_#2dd4bf]"
       >
-        <MediaComparison kind={item.kind} originalUrl={item.original_url} resultUrl={item.media_url} input={item.input} output={item.output} className="h-[45vh] min-h-[280px] lg:h-full lg:min-h-[560px]" />
+        <MediaComparison
+          kind={item.kind}
+          originalUrl={item.original_url}
+          resultUrl={item.media_url}
+          input={item.input}
+          output={item.output}
+          className="h-[45vh] min-h-[280px] lg:h-full lg:min-h-[560px]"
+        />
 
         <aside className="flex flex-col min-h-0 max-h-[92vh] border-t lg:border-t-0 lg:border-l border-zinc-800">
           <header className="flex items-start justify-between gap-3 p-5 border-b border-zinc-800">
@@ -135,11 +146,24 @@ export default function PostModal({ item, onChange, onClose }: Props) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <LikeButton item={item} onChange={onChange} />
-              <button onClick={onClose} aria-label="Закрыть" className="p-1 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Закрыть"
+                className="p-1 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600"
+              >
                 <X size={16} />
               </button>
             </div>
           </header>
+
+          {caption && (
+            <div className="px-5 py-3.5 border-b border-zinc-800 bg-zinc-900/50">
+              <p className="font-mono text-xs text-zinc-200 whitespace-pre-wrap break-words leading-relaxed">
+                {caption}
+              </p>
+            </div>
+          )}
 
           <div className="flex-1 min-h-[160px] overflow-y-auto p-5 space-y-4">
             <p className="font-mono text-xs uppercase text-zinc-500">Комментарии · {item.comment_count}</p>
@@ -147,15 +171,16 @@ export default function PostModal({ item, onChange, onClose }: Props) {
               <p className="text-sm text-zinc-500">Пока никто не написал. Будьте первым!</p>
             )}
             {comments.map((comment) => (
-              <div key={comment.id} className="group border-l-2 border-zinc-800 pl-3 hover:border-orange-500 transition-colors">
+              <div key={comment.id} className="group border-l-2 border-zinc-800 pl-3 hover:border-teal-400 transition-colors">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`font-bold text-sm ${comment.mine ? 'text-orange-500' : 'text-white'}`}>
+                  <span className={`font-bold text-sm ${comment.mine ? 'text-teal-400' : 'text-white'}`}>
                     @{comment.author.name}
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] text-zinc-600">{formatDate(comment.created_at)}</span>
                     {comment.can_delete && (
                       <button
+                        type="button"
                         onClick={() => void remove(comment)}
                         aria-label="Удалить комментарий"
                         title="Удалить"
@@ -169,9 +194,13 @@ export default function PostModal({ item, onChange, onClose }: Props) {
                 <p className="text-sm text-zinc-300 whitespace-pre-wrap break-words mt-1">{comment.text}</p>
               </div>
             ))}
-            {loading && <Loader2 className="animate-spin text-orange-500 mx-auto" />}
+            {loading && <Loader2 className="animate-spin text-teal-400 mx-auto" />}
             {!loading && cursor && (
-              <button onClick={() => loadMore(cursor)} className="font-mono text-xs uppercase text-orange-500 hover:underline">
+              <button
+                type="button"
+                onClick={() => loadMore(cursor)}
+                className="font-mono text-xs uppercase text-teal-400 hover:underline"
+              >
                 Показать ещё
               </button>
             )}
@@ -198,13 +227,13 @@ export default function PostModal({ item, onChange, onClose }: Props) {
                 }}
                 rows={2}
                 placeholder="Написать комментарий…"
-                className="flex-1 resize-none bg-zinc-900 border border-zinc-800 p-2 text-sm text-white focus:border-orange-500 focus:outline-none"
+                className="flex-1 resize-none bg-zinc-900 border border-zinc-800 p-2 text-sm text-white focus:border-teal-400 focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={sending || !text.trim()}
                 aria-label="Отправить"
-                className="px-3 bg-orange-500 text-black font-bold hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 bg-teal-400 text-black font-bold hover:bg-teal-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>

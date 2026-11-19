@@ -20,11 +20,11 @@ export default function JobPreviewModal({ job, onClose }: { job: Job; onClose: (
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Сравнение до и после" onClick={onClose} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
-      <div onClick={(event) => event.stopPropagation()} className="w-full max-w-5xl max-h-[92vh] overflow-y-auto border border-zinc-800 bg-zinc-950 shadow-[8px_8px_0px_#ea580c]">
+      <div onClick={(event) => event.stopPropagation()} className="w-full max-w-5xl max-h-[92vh] overflow-y-auto border border-zinc-800 bg-zinc-950 shadow-[8px_8px_0px_#2dd4bf]">
         <div className="flex items-center justify-between gap-4 p-4 border-b border-zinc-800">
           <h3 className="font-bold text-white truncate" title={job.filename}>{job.filename}</h3>
           <div className="flex items-center gap-3 shrink-0">
-            <a href={job.result_url} download={downloadName(job)} aria-label="Скачать результат" className="text-orange-500 hover:text-white"><Download size={18} /></a>
+            <a href={job.result_url} download={downloadName(job)} aria-label="Скачать результат" className="text-teal-400 hover:text-white"><Download size={18} /></a>
             <button onClick={onClose} aria-label="Закрыть" className="text-zinc-400 hover:text-white"><X size={20} /></button>
           </div>
         </div>

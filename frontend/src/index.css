@@ -1,35 +1,14 @@
 @import "tailwindcss";
 
 body {
-  
-  background-image: url('/bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  color: #44403C;
+  background-color: #09090b;
+  color: #f4f4f5;
   font-family: 'Inter', system-ui, sans-serif;
   margin: 0;
   overflow-x: hidden;
 }
 
-.bg-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(40, 20, 10, 0.3); 
-  backdrop-filter: blur(4px);
-  z-index: -1;
-}
-
-@keyframes fall {
-  0% { transform: translateY(-10vh) rotate(0deg) translateX(0); opacity: 0; }
-  15% { opacity: 0.75; }
-  85% { opacity: 0.75; }
-  100% { transform: translateY(110vh) rotate(360deg) translateX(40px); opacity: 0; }
-}
-
-.leaf {
-  position: fixed;
-  top: -10%;
-  pointer-events: none;
-  animation: fall 16s linear infinite;
+::selection {
+  background-color: #2dd4bf;
+  color: #09090b;
 }

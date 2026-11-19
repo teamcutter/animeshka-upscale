@@ -36,8 +36,8 @@ export default function LikeButton({ item, onChange }: { item: FeedItem; onChang
       title={item.liked ? 'Убрать лайк' : 'Нравится'}
       className={`flex items-center gap-1.5 px-2 py-1 border font-mono text-xs font-bold transition-colors ${
         item.liked
-          ? 'border-orange-500 bg-orange-500/10 text-orange-500'
-          : 'border-zinc-800 text-zinc-400 hover:border-orange-500 hover:text-orange-500'
+          ? 'border-teal-400 bg-teal-400/10 text-teal-400'
+          : 'border-zinc-800 text-zinc-400 hover:border-teal-400 hover:text-teal-400'
       }`}
     >
       <Heart size={14} fill={item.liked ? 'currentColor' : 'none'} />

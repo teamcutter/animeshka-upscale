@@ -134,7 +134,7 @@ export default function VideoComparison({ originalUrl, resultUrl }: Props) {
         />
         {(!ready || buffering) && !error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none" role="status">
-            <Loader2 className="animate-spin text-orange-500" aria-label="Загрузка видео" />
+            <Loader2 className="animate-spin text-teal-400" aria-label="Загрузка видео" />
           </div>
         )}
       </div>
@@ -145,10 +145,10 @@ export default function VideoComparison({ originalUrl, resultUrl }: Props) {
           </p>
         ) : (
           <div className="flex items-center gap-3">
-            <button onClick={toggle} disabled={!ready && !playing} aria-label={playing ? 'Пауза' : 'Воспроизвести сравнение'} className="text-orange-500 hover:text-white disabled:opacity-40 p-1">
+            <button onClick={toggle} disabled={!ready && !playing} aria-label={playing ? 'Пауза' : 'Воспроизвести сравнение'} className="text-teal-400 hover:text-white disabled:opacity-40 p-1">
               {playing ? <Pause size={20} /> : <Play size={20} />}
             </button>
-            <input aria-label="Позиция видео" type="range" min={0} max={duration || 0} step="0.01" value={Math.min(time, duration)} onChange={(event) => seek(Number(event.target.value))} disabled={!duration} className="flex-1 min-w-0 accent-orange-500" />
+            <input aria-label="Позиция видео" type="range" min={0} max={duration || 0} step="0.01" value={Math.min(time, duration)} onChange={(event) => seek(Number(event.target.value))} disabled={!duration} className="flex-1 min-w-0 accent-teal-400" />
             <span className="font-mono text-xs whitespace-nowrap">{videoTime(time)} / {videoTime(duration)}</span>
             <button onClick={() => setMuted(!muted)} aria-label={muted ? 'Включить звук' : 'Выключить звук'} className="text-zinc-400 hover:text-white p-1">
               {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}

@@ -18,6 +18,7 @@ import {
 import { formatBytes } from '../hooks';
 import VideoSelection from './VideoSelection';
 import MediaComparison from './MediaComparison';
+import PublishModal from './PublishModal';
 
 type Phase = 'idle' | 'selecting' | 'uploading' | 'queued' | 'processing' | 'done' | 'error';
 
@@ -39,7 +40,7 @@ const MODES: Mode[] = ['2k', '4k'];
 
 const OPTION = (active: boolean) =>
   `w-full text-left px-4 py-3 font-mono text-sm uppercase transition-colors flex justify-between items-center disabled:opacity-40 disabled:cursor-not-allowed ${
-    active ? 'border border-orange-500 bg-orange-500/10 text-orange-500 font-bold' : 'border border-zinc-800 text-zinc-400 hover:border-zinc-600'
+    active ? 'border border-teal-400 bg-teal-400/10 text-teal-400 font-bold' : 'border border-zinc-800 text-zinc-400 hover:border-zinc-600'
   }`;
 
 export default function MainTab({ health }: { health: Health | null }) {
@@ -53,6 +54,8 @@ export default function MainTab({ health }: { health: Health | null }) {
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishError, setPublishError] = useState('');
 
   // Cancels the upload/polling of the current job on reset or unmount.
   const controllerRef = useRef<AbortController | null>(null);
@@ -130,16 +133,38 @@ export default function MainTab({ health }: { health: Health | null }) {
     setSourceUrl(null);
     setVideoPreviewUrl(null);
     setError('');
+    setPublishModalOpen(false);
+    setPublishError('');
     setPhase('idle');
   };
 
-  const togglePublish = async () => {
+  const handlePublishClick = async () => {
+    if (!job) return;
+    if (job.published) {
+      setPublishing(true);
+      setError('');
+      try {
+        setJob(await unpublishJob(job.id));
+      } catch (err) {
+        setError(errorMessage(err));
+      } finally {
+        setPublishing(false);
+      }
+      return;
+    }
+    setPublishError('');
+    setPublishModalOpen(true);
+  };
+
+  const handlePublishConfirm = async (caption: string) => {
     if (!job) return;
     setPublishing(true);
+    setPublishError('');
     try {
-      setJob(job.published ? await unpublishJob(job.id) : await publishJob(job.id));
+      setJob(await publishJob(job.id, caption));
+      setPublishModalOpen(false);
     } catch (err) {
-      setError(errorMessage(err));
+      setPublishError(errorMessage(err));
     } finally {
       setPublishing(false);
     }
@@ -151,14 +176,14 @@ export default function MainTab({ health }: { health: Health | null }) {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
-      <div className="flex justify-between items-end border-l-4 border-orange-500 pl-6 py-2">
+      <div className="flex justify-between items-end border-l-4 border-teal-400 pl-6 py-2">
         <div>
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Терминал обработки</h2>
           <p className="text-zinc-500 font-mono text-sm uppercase mt-1">MAIN_WORKSPACE</p>
         </div>
         {health && (
           <div className="items-center space-x-2 border border-zinc-800 bg-zinc-900 px-3 py-1.5 hidden md:flex">
-            <div className={`w-2 h-2 rounded-full ${health.status === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${health.status === 'ok' ? 'bg-teal-400 animate-pulse' : 'bg-red-500'}`}></div>
             <span className="font-mono text-xs text-zinc-400">API: {health.status.toUpperCase()}</span>
           </div>
         )}
@@ -169,18 +194,18 @@ export default function MainTab({ health }: { health: Health | null }) {
           <div
             {...getRootProps()}
             className={`lg:col-span-2 border border-dashed bg-zinc-900 p-6 flex flex-col items-center justify-center min-h-[350px] transition-colors cursor-pointer relative group ${
-              isDragActive ? 'border-orange-500 bg-orange-500/5' : 'border-zinc-800 hover:border-orange-500'
+              isDragActive ? 'border-teal-400 bg-teal-400/5' : 'border-zinc-800 hover:border-teal-400'
             }`}
           >
             <input {...getInputProps()} />
             {file && sourceUrl && kind === 'image' ? (
               <img src={sourceUrl} alt="Выбранный файл" className="max-h-[300px] object-contain" />
             ) : (
-              <div className="w-16 h-16 bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-500 group-hover:text-orange-500 group-hover:border-orange-500 transition-all mb-4">
+              <div className="w-16 h-16 bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-500 group-hover:text-teal-400 group-hover:border-teal-400 transition-all mb-4">
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
               </div>
             )}
-            <h3 className="font-bold text-white uppercase tracking-widest text-xl group-hover:text-orange-500 transition-colors mt-4">
+            <h3 className="font-bold text-white uppercase tracking-widest text-xl group-hover:text-teal-400 transition-colors mt-4">
               {file ? 'Заменить файл' : 'Выбрать медиа'}
             </h3>
             <p className="text-zinc-500 font-mono text-xs mt-3 uppercase tracking-wider">
@@ -206,7 +231,7 @@ export default function MainTab({ health }: { health: Health | null }) {
                   {MODES.map((candidate) => (
                     <button key={candidate} onClick={() => setMode(candidate)} disabled={!modeAvailable(candidate)} className={OPTION(effectiveMode === candidate)}>
                       <span>x{candidate === '4k' ? 4 : 2}_{candidate}{modeAvailable(candidate) ? '' : ' · нет весов'}</span>
-                      {effectiveMode === candidate && <span className="w-2 h-2 bg-orange-500"></span>}
+                      {effectiveMode === candidate && <span className="w-2 h-2 bg-teal-400"></span>}
                     </button>
                   ))}
                 </div>
@@ -216,7 +241,7 @@ export default function MainTab({ health }: { health: Health | null }) {
             <button
               onClick={() => file && void run(file)}
               disabled={!file || kind !== 'image'}
-              className="w-full bg-orange-500 text-black font-black uppercase tracking-widest py-5 hover:bg-orange-400 transition-transform shadow-[6px_6px_0px_#fff] hover:shadow-[8px_8px_0px_#fff] hover:-translate-y-0.5 active:translate-y-1 active:shadow-none disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+              className="w-full bg-teal-400 text-black font-black uppercase tracking-widest py-5 hover:bg-teal-300 transition-transform shadow-[6px_6px_0px_#fff] hover:shadow-[8px_8px_0px_#fff] hover:-translate-y-0.5 active:translate-y-1 active:shadow-none disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
             >
               Инициализация
             </button>
@@ -239,7 +264,7 @@ export default function MainTab({ health }: { health: Health | null }) {
 
       {busy && (
         <div className="border border-zinc-800 bg-zinc-900 p-12 flex flex-col items-center text-center">
-          <Loader2 className="animate-spin w-12 h-12 text-orange-500 mb-6" />
+          <Loader2 className="animate-spin w-12 h-12 text-teal-400 mb-6" />
           <p className="font-black text-white uppercase tracking-widest">
             {phase === 'uploading' && `Загрузка… ${Math.round(progress * 100)}%`}
             {phase === 'queued' && 'В очереди'}
@@ -247,7 +272,7 @@ export default function MainTab({ health }: { health: Health | null }) {
           </p>
           {phase === 'uploading' && (
             <div className="w-full max-w-md h-1 bg-zinc-800 mt-4">
-              <div className="h-full bg-orange-500 transition-all" style={{ width: `${progress * 100}%` }} />
+              <div className="h-full bg-teal-400 transition-all" style={{ width: `${progress * 100}%` }} />
             </div>
           )}
           {job && <p className="text-xs text-zinc-600 mt-4 font-mono">JOB_{job.id}</p>}
@@ -288,12 +313,12 @@ export default function MainTab({ health }: { health: Health | null }) {
             </button>
             <div className="flex gap-3">
               <button
-                onClick={() => void togglePublish()}
+                onClick={() => void handlePublishClick()}
                 disabled={publishing}
                 className={`flex items-center gap-2 px-6 py-3 border font-mono text-xs font-bold uppercase transition-colors disabled:opacity-50 ${
                   job.published
                     ? 'border-zinc-700 text-zinc-300 hover:border-red-500 hover:text-red-500'
-                    : 'border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-black'
+                    : 'border-teal-400/70 text-teal-400 hover:bg-teal-400 hover:text-black'
                 }`}
               >
                 {job.published ? <Undo2 size={14} /> : <Send size={14} />}
@@ -302,7 +327,7 @@ export default function MainTab({ health }: { health: Health | null }) {
               <a
                 href={job.result_url}
                 download={downloadName(job)}
-                className="flex items-center gap-2 bg-orange-500 text-black px-6 py-3 font-black text-xs uppercase hover:bg-orange-400"
+                className="flex items-center gap-2 bg-teal-400 text-black px-6 py-3 font-black text-xs uppercase hover:bg-teal-300"
               >
                 <Download size={14} /> Скачать
               </a>
@@ -319,6 +344,19 @@ export default function MainTab({ health }: { health: Health | null }) {
             Попробовать снова
           </button>
         </div>
+      )}
+
+      {publishModalOpen && job && (
+        <PublishModal
+          title={job.filename}
+          submitting={publishing}
+          error={publishError}
+          onConfirm={handlePublishConfirm}
+          onClose={() => {
+            setPublishModalOpen(false);
+            setPublishError('');
+          }}
+        />
       )}
     </div>
   );

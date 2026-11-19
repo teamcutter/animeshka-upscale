@@ -256,6 +256,7 @@ export interface FeedItem {
   output: FileInfo;
   media_url: string;
   original_url: string;
+  caption?: string | null;
   like_count: number;
   liked: boolean;
   comment_count: number;
@@ -278,8 +279,11 @@ export interface Comment {
 }
 
 /** Share any finished job (image or video, new or old) in the public feed. */
-export async function publishJob(id: string): Promise<Job> {
-  const { data } = await http.post<Job>(`/api/jobs/${id}/publish`);
+export async function publishJob(id: string, caption?: string): Promise<Job> {
+  const { data } = await http.post<Job>(
+    `/api/jobs/${id}/publish`,
+    caption?.trim() ? { caption: caption.trim() } : undefined,
+  );
   return data;
 }
 

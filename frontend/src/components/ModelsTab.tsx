@@ -10,7 +10,7 @@ const CONTENT_LABELS: Record<string, string> = {
   anime: 'Аниме', portrait: 'Портрет', landscape: 'Пейзаж',
   text: 'Текст', noise: 'Шум', unknown: 'Без категории',
 };
-const INPUT = 'w-full border border-zinc-700 bg-zinc-950 p-3 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none';
+const INPUT = 'w-full border border-zinc-700 bg-zinc-950 p-3 text-sm text-zinc-100 focus:border-teal-400 focus:outline-none';
 const metric = (value: number | null | undefined) => value == null ? '—' : value.toFixed(3);
 const STATUS_LABELS = {
   pending: 'Подключение к базе', disabled: 'Автообучение отключено',
@@ -100,8 +100,8 @@ export default function ModelsTab() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <div className="border-l-4 border-orange-500 pl-6 py-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-orange-500">Quality lab / QoP</p>
+      <div className="border-l-4 border-teal-400 pl-6 py-2">
+        <p className="font-mono text-xs uppercase tracking-widest text-teal-400">Quality lab / QoP</p>
         <h2 className="mt-2 text-3xl font-black uppercase tracking-tighter text-white">Модели качества</h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
           Сравните OLS, Ridge и Lasso и оцените качество изображения до апскейла.
@@ -112,12 +112,12 @@ export default function ModelsTab() {
       <div className="flex flex-wrap gap-3">
         {(['trained', 'demo'] as const).map(value => (
           <button key={value} onClick={() => changeSource(value)} aria-pressed={source === value}
-            className={`border px-5 py-3 text-xs font-bold uppercase tracking-widest ${source === value ? 'border-orange-500 bg-orange-500/10 text-orange-500' : 'border-zinc-700 text-zinc-400 hover:text-white'}`}>
+            className={`border px-5 py-3 text-xs font-bold uppercase tracking-widest ${source === value ? 'border-teal-400 bg-teal-400/10 text-teal-400' : 'border-zinc-700 text-zinc-400 hover:text-white'}`}>
             {value === 'trained' ? 'Обученные модели' : 'Демо на синтетических данных'}
           </button>
         ))}
         {catalog?.available && (
-          <a href={`/api/qop/models/download?source=${source}`} className="ml-auto flex items-center gap-2 border border-zinc-700 px-4 py-3 text-xs text-zinc-300 hover:border-orange-500">
+          <a href={`/api/qop/models/download?source=${source}`} className="ml-auto flex items-center gap-2 border border-zinc-700 px-4 py-3 text-xs text-zinc-300 hover:border-teal-400">
             <Download size={15} /> Скачать модели
           </a>
         )}
@@ -138,7 +138,7 @@ export default function ModelsTab() {
         <section className="border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-bold text-white">Данные из сохранённых работ</h3>
-            <span role="status" className="text-xs font-mono text-orange-400">{STATUS_LABELS[catalog.automatic.state]}</span>
+            <span role="status" className="text-xs font-mono text-teal-400">{STATUS_LABELS[catalog.automatic.state]}</span>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-zinc-400">Метрики загружаются из базы автоматически.
             Недостающие измерения восстанавливаются по исходным и готовым изображениям.
@@ -164,7 +164,7 @@ export default function ModelsTab() {
             Экспортировать данные или запускать обучение вручную не требуется.
             Пока можно сравнить регрессии и попробовать прогноз в демо.
           </p>
-          <button onClick={() => changeSource('demo')} className="mt-6 bg-orange-500 px-6 py-3 text-sm font-bold text-black">Открыть демо</button>
+          <button onClick={() => changeSource('demo')} className="mt-6 bg-teal-400 px-6 py-3 text-sm font-bold text-black">Открыть демо</button>
         </div>
       )}
 
@@ -191,7 +191,7 @@ export default function ModelsTab() {
                 <th className="py-3">Модель</th><th>R² / тест</th><th>MAE / тест</th><th>RMSE / тест</th><th>RMSE / CV</th>
               </tr></thead>
               <tbody>{catalog.models?.map(model => <tr key={model.name} className="border-b border-zinc-800 font-mono text-zinc-300">
-                <th className="py-4 font-medium text-white">{model.name}{catalog.best_model === model.name && <span className="ml-2 text-xs text-orange-500">★ CV</span>}</th>
+                <th className="py-4 font-medium text-white">{model.name}{catalog.best_model === model.name && <span className="ml-2 text-xs text-teal-400">★ CV</span>}</th>
                 <td>{metric(model.metrics.R2_test)}</td><td>{metric(model.metrics.MAE_test)}</td>
                 <td>{metric(model.metrics.RMSE_test)}</td><td>{metric(model.metrics.RMSE_cv_mean)}</td>
               </tr>)}</tbody>
@@ -220,7 +220,7 @@ export default function ModelsTab() {
                 </select>
               </label>
             </div>
-            <button onClick={() => void run()} disabled={!file || busy} className="mt-5 flex w-full items-center justify-center gap-2 bg-orange-500 px-6 py-4 text-sm font-black uppercase text-black hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40">
+            <button onClick={() => void run()} disabled={!file || busy} className="mt-5 flex w-full items-center justify-center gap-2 bg-teal-400 px-6 py-4 text-sm font-black uppercase text-black hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-40">
               {busy ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
               {busy ? 'Расчёт…' : 'Оценить качество'}
             </button>
@@ -232,7 +232,7 @@ export default function ModelsTab() {
                 <p className="mb-2 text-sm font-bold text-white">{model.name}</p>
                 <div className="space-y-2">{result.predictions.filter(item => item.model === model.name).map(item => <div key={item.mode} className="flex items-center gap-3">
                   <span className="w-7 text-xs text-zinc-500">{item.mode === '4k' ? '×4' : '×2'}</span>
-                  <div className="h-2 flex-1 bg-zinc-800"><div className={`h-full ${item.mode === '4k' ? 'bg-orange-500' : 'bg-zinc-400'}`} style={{ width: `${Math.max(0, Math.min(100, result.target === 'qop' ? item.value * 100 : item.value))}%` }} /></div>
+                  <div className="h-2 flex-1 bg-zinc-800"><div className={`h-full ${item.mode === '4k' ? 'bg-teal-400' : 'bg-zinc-400'}`} style={{ width: `${Math.max(0, Math.min(100, result.target === 'qop' ? item.value * 100 : item.value))}%` }} /></div>
                   <span className="w-14 text-right font-mono text-sm text-white">{item.value.toFixed(3)}</span>
                 </div>)}</div></div>)}</div>
               <p className="mt-5 text-xs leading-relaxed text-zinc-500">{result.target === 'qop' ? 'QoP: 0–1. Значения ограничены этим диапазоном.' : 'PSNR в dB.'} Прогноз — оценка модели, а не измеренное качество результата.</p>

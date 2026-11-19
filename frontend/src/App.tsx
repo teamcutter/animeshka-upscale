@@ -3,8 +3,8 @@ import MainTab from './components/MainTab';
 import ProfileTab from './components/ProfileTab';
 import HistoryTab from './components/HistoryTab';
 import FeedTab from './components/FeedTab';
-import AuthScreen from './components/AuthScreen';
-import FallingLeaves from './components/FallingLeaves';
+// import AuthScreen from './components/AuthScreen';
+// import FallingLeaves from './components/FallingLeaves';
 import WelcomeTab from './components/WelcomeTab';
 import ModelsTab from './components/ModelsTab';
 import { useAuth } from './context/useAuth';
@@ -22,22 +22,22 @@ export default function App() {
     setTab(tab);
     window.history.replaceState(null, '', `#${tab}`);
   }
-  const { user, isLoading } = useAuth();
+  const { isLoading } = useAuth();
   const { health } = useHealth();
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <p className="text-orange-500 font-mono animate-pulse uppercase tracking-widest">Загрузка системы...</p>
+        <p className="text-teal-400 font-mono animate-pulse uppercase tracking-widest">Загрузка системы...</p>
       </div>
     );
   }
-
+  /*
   if (!user) {
     return (
       <div className="relative min-h-screen bg-stone-900">
-        <div 
-          className="absolute inset-0 z-0 opacity-40 bg-cover bg-center" 
+        <div
+          className="absolute inset-0 z-0 opacity-40 bg-cover bg-center"
           style={{ backgroundImage: "url('/bg.jpg')" }}
         ></div>
         <FallingLeaves />
@@ -47,29 +47,28 @@ export default function App() {
       </div>
     );
   }
-
+  */
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-orange-500 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-teal-400 selection:text-black">
       <header className="border-b border-zinc-800 bg-zinc-950 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-16 flex flex-wrap items-center justify-between">
-          
           <div className="flex-1 flex items-center">
-            <button 
-              onClick={() => setActiveTab('welcome')} 
-              className="text-white font-black text-xl tracking-tighter hover:text-orange-500 transition-colors uppercase"
+            <button
+              onClick={() => setActiveTab('welcome')}
+              className="text-white font-black text-xl tracking-tighter hover:text-teal-400 transition-colors uppercase"
             >
-              Animeshka<span className="text-orange-500">_Upscale</span>
+              Animeshka<span className="text-teal-400">_Upscale</span>
             </button>
           </div>
-          
+
           <nav aria-label="Основная навигация" className="order-3 w-full justify-center md:order-none md:w-auto flex-none flex space-x-1">
             {(['main', 'feed', 'history', 'models'] as const).map(tab => (
-              <button 
+              <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-2 sm:px-5 py-5 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
-                  activeTab === tab 
-                    ? 'border-orange-500 text-orange-500 bg-orange-500/10' 
+                  activeTab === tab
+                    ? 'border-teal-400 text-teal-400 bg-teal-400/10'
                     : 'border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900'
                 }`}
               >
@@ -79,11 +78,11 @@ export default function App() {
           </nav>
 
           <div className="flex-1 flex justify-end">
-            <button 
+            <button
               onClick={() => setActiveTab('profile')}
               className={`p-2 transition-all border ${
-                activeTab === 'profile' 
-                  ? 'border-orange-500 text-orange-500 bg-orange-500/10' 
+                activeTab === 'profile'
+                  ? 'border-teal-400 text-teal-400 bg-teal-400/10'
                   : 'border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-white'
               }`}
             >
@@ -92,7 +91,6 @@ export default function App() {
               </svg>
             </button>
           </div>
-
         </div>
       </header>
 
