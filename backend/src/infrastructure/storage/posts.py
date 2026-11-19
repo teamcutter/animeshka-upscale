@@ -1,18 +1,35 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, and_, delete, exists, func, or_, select
+from sqlalchemy import ColumnElement, Select, and_, delete, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import InstrumentedAttribute, Session, contains_eager, sessionmaker
 
-from src.features.feed.domain import Comment, CommentView, Cursor, FeedItem, Post
+from src.features.feed.domain import (
+    Comment,
+    CommentView,
+    Cursor,
+    FeedItem,
+    Post,
+    TagCount,
+    extract_tags,
+)
 from src.features.upscale.domain import now_utc
-from src.infrastructure.db.models import CommentRow, JobRow, LikeRow, PostRow, UserRow
+from src.infrastructure.db.models import CommentRow, JobRow, LikeRow, PostRow, PostTagRow, UserRow
 from src.infrastructure.storage.sql import aware_utc, job_from_row
 
 
 def _to_post(row: PostRow) -> Post:
-    return Post(id=row.id, job_id=row.job_id, published_at=aware_utc(row.published_at))
+    return Post(
+        id=row.id,
+        job_id=row.job_id,
+        published_at=aware_utc(row.published_at),
+        description=row.description,
+    )
+
+
+def _tag_rows(post_id: UUID, description: str | None) -> list[PostTagRow]:
+    return [PostTagRow(post_id=post_id, tag=tag) for tag in extract_tags(description)]
 
 
 def _feed_query(viewer_id: UUID) -> Select[tuple[PostRow, str, int, int, bool]]:
@@ -54,7 +71,17 @@ class SqlPostRepository:
     def add(self, post: Post) -> Post | None:
         try:
             with self._sessions.begin() as session:
-                session.add(PostRow(id=post.id, job_id=post.job_id, published_at=post.published_at))
+                session.add(
+                    PostRow(
+                        id=post.id,
+                        job_id=post.job_id,
+                        published_at=post.published_at,
+                        description=post.description,
+                    )
+                )
+                # Flushed first: the tag rows reference the post.
+                session.flush()
+                session.add_all(_tag_rows(post.id, post.description))
             return post
         except IntegrityError:
             # Unique job_id: already published (also two publishes at once);
@@ -67,13 +94,29 @@ class SqlPostRepository:
         with self._sessions.begin() as session:
             session.execute(delete(PostRow).where(PostRow.job_id == job_id))
 
+    def set_description(self, post_id: UUID, description: str | None) -> bool:
+        with self._sessions.begin() as session:
+            changed = session.execute(
+                update(PostRow).where(PostRow.id == post_id).values(description=description)
+            ).rowcount
+            if not changed:
+                return False
+            session.execute(delete(PostTagRow).where(PostTagRow.post_id == post_id))
+            session.add_all(_tag_rows(post_id, description))
+        return True
+
     def get_item(self, post_id: UUID, viewer_id: UUID) -> FeedItem | None:
         with self._sessions() as session:
             row = session.execute(_feed_query(viewer_id).where(PostRow.id == post_id)).first()
             return self._to_item(*row) if row else None
 
     def list_items(
-        self, *, viewer_id: UUID, limit: int, before: Cursor | None = None
+        self,
+        *,
+        viewer_id: UUID,
+        limit: int,
+        before: Cursor | None = None,
+        tags: list[str] | None = None,
     ) -> list[FeedItem]:
         stmt = (
             _feed_query(viewer_id)
@@ -82,8 +125,27 @@ class SqlPostRepository:
         )
         if before is not None:
             stmt = stmt.where(_past(PostRow.published_at, PostRow.id, before, older=True))
+        # Every tag must be there: one EXISTS per tag, each an index lookup on (tag, post_id).
+        for tag in tags or []:
+            stmt = stmt.where(
+                exists().where(PostTagRow.post_id == PostRow.id, PostTagRow.tag == tag)
+            )
         with self._sessions() as session:
             return [self._to_item(*row) for row in session.execute(stmt)]
+
+    def popular_tags(self, *, prefix: str = "", limit: int) -> list[TagCount]:
+        posts = func.count().label("posts")
+        stmt = (
+            select(PostTagRow.tag, posts)
+            .group_by(PostTagRow.tag)
+            .order_by(posts.desc(), PostTagRow.tag)
+            .limit(limit)
+        )
+        if prefix:
+            # autoescape: '_' is a valid tag character but a LIKE wildcard.
+            stmt = stmt.where(PostTagRow.tag.startswith(prefix, autoescape=True))
+        with self._sessions() as session:
+            return [TagCount(tag=tag, posts=count) for tag, count in session.execute(stmt)]
 
     @staticmethod
     def _to_item(

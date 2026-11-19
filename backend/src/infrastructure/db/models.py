@@ -126,6 +126,7 @@ class PostRow(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), unique=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    description: Mapped[str | None] = mapped_column(Text)
 
     job: Mapped[JobRow] = relationship()
 
@@ -157,3 +158,19 @@ class CommentRow(Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PostTagRow(Base):
+    """Search index of the hashtags in a post's description (lower case, without '#').
+
+    Rewritten with the description; the description itself stays the source of truth.
+    """
+
+    __tablename__ = "post_tags"
+    # Search goes tag -> posts; the primary key (post_id, tag) serves the cascade from posts.
+    __table_args__ = (Index("ix_post_tags_tag_post_id", "tag", "post_id"),)
+
+    post_id: Mapped[UUID] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+    )
+    tag: Mapped[str] = mapped_column(String(50), primary_key=True)

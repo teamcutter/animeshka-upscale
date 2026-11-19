@@ -34,6 +34,8 @@ class JobResponse(BaseModel):
     error: str | None
     published: bool
     published_at: datetime | None
+    # Id of the feed post while published: for /api/feed/{post_id} (edit description etc.).
+    post_id: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -57,6 +59,7 @@ class JobResponse(BaseModel):
             error=job.error,
             published=job.published_at is not None,
             published_at=job.published_at,
+            post_id=job.post_id,
             created_at=job.created_at,
             updated_at=job.updated_at,
         )

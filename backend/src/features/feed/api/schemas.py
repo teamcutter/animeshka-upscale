@@ -6,10 +6,12 @@ from pydantic import BaseModel, Field
 
 from src.features.feed.domain import (
     COMMENT_MAX_LENGTH,
+    DESCRIPTION_MAX_LENGTH,
     CommentPage,
     CommentView,
     FeedItem,
     FeedPage,
+    TagCount,
 )
 from src.features.upscale.api.schemas import FileInfo
 from src.features.upscale.domain import MediaKind, Mode
@@ -34,6 +36,9 @@ class FeedItemResponse(BaseModel):
     like_count: int
     liked: bool
     comment_count: int
+    # The author's text and the #hashtags found in it (lower case, without '#').
+    description: str | None
+    tags: list[str]
     published_at: datetime
 
     @classmethod
@@ -54,6 +59,8 @@ class FeedItemResponse(BaseModel):
             like_count=item.like_count,
             liked=item.liked,
             comment_count=item.comment_count,
+            description=item.post.description,
+            tags=item.post.tags,
             published_at=item.post.published_at,
         )
 
@@ -69,6 +76,20 @@ class FeedPageResponse(BaseModel):
             items=[FeedItemResponse.from_item(item, viewer_id) for item in page.items],
             next_cursor=page.next_cursor.encode() if page.next_cursor else None,
         )
+
+
+class DescriptionRequest(BaseModel):
+    # Hashtags in the text become the post's tags: "Закат #аниме #4k". Empty or null clears it.
+    description: Annotated[str | None, Field(max_length=DESCRIPTION_MAX_LENGTH)] = None
+
+
+class TagResponse(BaseModel):
+    tag: str
+    posts: int
+
+    @classmethod
+    def from_count(cls, count: TagCount) -> "TagResponse":
+        return cls(tag=count.tag, posts=count.posts)
 
 
 class CommentRequest(BaseModel):

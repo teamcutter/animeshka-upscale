@@ -4,6 +4,7 @@ from uuid import UUID
 
 from src.features.feed.domain import (
     COMMENT_MAX_LENGTH,
+    DESCRIPTION_MAX_LENGTH,
     Comment,
     CommentPage,
     CommentView,
@@ -11,6 +12,8 @@ from src.features.feed.domain import (
     FeedItem,
     FeedPage,
     Post,
+    TagCount,
+    normalize_tag,
 )
 from src.features.feed.ports import CommentRepository, LikeRepository, PostRepository
 from src.features.upscale.domain import FileRole, Job, JobStatus
@@ -29,6 +32,21 @@ def _parse_cursor(value: str | None) -> Cursor | None:
         raise BadRequestError("Invalid cursor") from exc
 
 
+def _clean_description(value: str | None) -> str | None:
+    """Trimmed text; empty means no description."""
+    value = (value or "").strip()
+    if len(value) > DESCRIPTION_MAX_LENGTH:
+        raise BadRequestError(f"Description is longer than {DESCRIPTION_MAX_LENGTH} characters")
+    return value or None
+
+
+def _parse_tags(values: list[str] | None) -> list[str]:
+    try:
+        return list(dict.fromkeys(normalize_tag(value) for value in values or []))
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+
 class FeedService:
     def __init__(
         self,
@@ -44,43 +62,80 @@ class FeedService:
 
     # --- publishing -------------------------------------------------------------------------
 
-    def publish(self, job_id: UUID, owner_id: UUID) -> Job:
+    def publish(self, job_id: UUID, owner_id: UUID, description: str | None = None) -> Job:
         """Shares any finished job (image or video, new or old) in the feed.
 
-        Publishing it again changes nothing.
+        The description's #hashtags make the post findable by tag. Publishing an already
+        published job keeps the post (likes, comments, date); a description given then
+        replaces the old one, None leaves it as it is.
         """
+        text = _clean_description(description) if description is not None else None
         job = self._upscale.get_job(job_id, owner_id)
         if job.status is not JobStatus.DONE or job.output is None:
             raise JobNotReadyError(
                 f"Job {job_id} is {job.status}, only finished jobs can be published"
             )
-        post = self._posts.add(Post(job_id=job.id))
+        new = Post(job_id=job.id, description=text)
+        post = self._posts.add(new)
         if post is None:
             # Deleted by its owner between the check above and the insert.
             raise NotFoundError(f"Job {job_id} not found")
-        if job.published_at is None:
+        if post.id == new.id:
             logger.info("Published job %s as post %s", job.id, post.id)
+        elif description is not None and post.description != text:
+            self._set_description(post.id, text)
         job.published_at = post.published_at
+        job.post_id = post.id
         return job
+
+    def edit_description(self, post_id: UUID, user_id: UUID, description: str | None) -> FeedItem:
+        """Only the post's author can change its description (and with it the tags)."""
+        text = _clean_description(description)
+        item = self.get_item(post_id, user_id)
+        if item.job.owner_id != user_id:
+            raise ForbiddenError("Only the author of the post can edit its description")
+        self._set_description(post_id, text)
+        return self.get_item(post_id, user_id)
+
+    def _set_description(self, post_id: UUID, text: str | None) -> None:
+        if not self._posts.set_description(post_id, text):
+            raise NotFoundError(f"Post {post_id} not found")
 
     def unpublish(self, job_id: UUID, owner_id: UUID) -> Job:
         """Removes the job from the feed (with its likes and comments); the job and files stay."""
         job = self._upscale.get_job(job_id, owner_id)
         self._posts.delete_by_job(job.id)
         job.published_at = None
+        job.post_id = None
         return job
 
     # --- reading the feed -------------------------------------------------------------------
 
-    def page(self, viewer_id: UUID, *, limit: int, cursor: str | None = None) -> FeedPage:
+    def page(
+        self,
+        viewer_id: UUID,
+        *,
+        limit: int,
+        cursor: str | None = None,
+        tags: list[str] | None = None,
+    ) -> FeedPage:
+        """Newest first; with `tags` ('anime' or '#anime'), only posts having all of them."""
         before = _parse_cursor(cursor)
+        wanted = _parse_tags(tags)
         # One extra row tells whether there is a next page without a COUNT query.
-        items = self._posts.list_items(viewer_id=viewer_id, limit=limit + 1, before=before)
+        items = self._posts.list_items(
+            viewer_id=viewer_id, limit=limit + 1, before=before, tags=wanted
+        )
         if len(items) <= limit:
             return FeedPage(items=items, next_cursor=None)
         items = items[:limit]
         last = items[-1].post
         return FeedPage(items=items, next_cursor=Cursor(at=last.published_at, id=last.id))
+
+    def popular_tags(self, *, prefix: str = "", limit: int) -> list[TagCount]:
+        """For search suggestions: tags by number of posts, optionally by prefix."""
+        prefix = prefix.strip().removeprefix("#").lower()
+        return self._posts.popular_tags(prefix=prefix, limit=limit)
 
     def get_item(self, post_id: UUID, viewer_id: UUID) -> FeedItem:
         item = self._posts.get_item(post_id, viewer_id)

@@ -49,6 +49,7 @@ def job_from_row(row: JobRow) -> Job:
         error=row.error,
         metrics={m.name: m.value for m in row.metrics},
         published_at=aware_utc(row.post.published_at) if row.post else None,
+        post_id=row.post.id if row.post else None,
         created_at=aware_utc(row.created_at),
         updated_at=aware_utc(row.updated_at),
     )
