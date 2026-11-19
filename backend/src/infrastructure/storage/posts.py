@@ -1,7 +1,20 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, and_, delete, exists, func, or_, select, update
+from sqlalchemy import (
+    ColumnElement,
+    Exists,
+    Select,
+    and_,
+    case,
+    delete,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import InstrumentedAttribute, Session, contains_eager, sessionmaker
 
@@ -11,11 +24,22 @@ from src.features.feed.domain import (
     Cursor,
     FeedItem,
     Post,
+    SearchCursor,
+    SearchFilters,
     TagCount,
     extract_tags,
+    extract_words,
 )
 from src.features.upscale.domain import now_utc
-from src.infrastructure.db.models import CommentRow, JobRow, LikeRow, PostRow, PostTagRow, UserRow
+from src.infrastructure.db.models import (
+    CommentRow,
+    JobRow,
+    LikeRow,
+    PostRow,
+    PostTagRow,
+    PostWordRow,
+    UserRow,
+)
 from src.infrastructure.storage.sql import aware_utc, job_from_row
 
 
@@ -28,8 +52,18 @@ def _to_post(row: PostRow) -> Post:
     )
 
 
-def _tag_rows(post_id: UUID, description: str | None) -> list[PostTagRow]:
-    return [PostTagRow(post_id=post_id, tag=tag) for tag in extract_tags(description)]
+def _index_rows(post_id: UUID, description: str | None) -> list[PostTagRow | PostWordRow]:
+    """Search index rows of a description: its hashtags and all its words."""
+    tags = [PostTagRow(post_id=post_id, tag=tag) for tag in extract_tags(description)]
+    words = [PostWordRow(post_id=post_id, word=word) for word in extract_words(description)]
+    return [*tags, *words]
+
+
+def _has_word_starting(term: str) -> Exists:
+    # autoescape: '_' is a word character but a LIKE wildcard.
+    return exists().where(
+        PostWordRow.post_id == PostRow.id, PostWordRow.word.startswith(term, autoescape=True)
+    )
 
 
 def _feed_query(viewer_id: UUID) -> Select[tuple[PostRow, str, int, int, bool]]:
@@ -81,7 +115,7 @@ class SqlPostRepository:
                 )
                 # Flushed first: the tag rows reference the post.
                 session.flush()
-                session.add_all(_tag_rows(post.id, post.description))
+                session.add_all(_index_rows(post.id, post.description))
             return post
         except IntegrityError:
             # Unique job_id: already published (also two publishes at once);
@@ -102,7 +136,8 @@ class SqlPostRepository:
             if not changed:
                 return False
             session.execute(delete(PostTagRow).where(PostTagRow.post_id == post_id))
-            session.add_all(_tag_rows(post_id, description))
+            session.execute(delete(PostWordRow).where(PostWordRow.post_id == post_id))
+            session.add_all(_index_rows(post_id, description))
         return True
 
     def get_item(self, post_id: UUID, viewer_id: UUID) -> FeedItem | None:
@@ -132,6 +167,55 @@ class SqlPostRepository:
             )
         with self._sessions() as session:
             return [self._to_item(*row) for row in session.execute(stmt)]
+
+    def search(
+        self,
+        filters: SearchFilters,
+        *,
+        viewer_id: UUID,
+        limit: int,
+        after: SearchCursor | None = None,
+    ) -> list[FeedItem]:
+        terms, excluded = filters.query.terms, filters.query.excluded
+        # Relevance = how many terms the post has; each term is one indexed prefix lookup.
+        relevance: ColumnElement[int] = (
+            sum((case((_has_word_starting(t), 1), else_=0) for t in terms), literal(0))
+            if terms
+            else literal(0)
+        )
+        stmt = (
+            _feed_query(viewer_id)
+            .add_columns(relevance)
+            .order_by(relevance.desc(), PostRow.published_at.desc(), PostRow.id.desc())
+            .limit(limit)
+        )
+        if terms:
+            stmt = stmt.where(relevance > 0)
+        for word in excluded:
+            stmt = stmt.where(~_has_word_starting(word))
+        if filters.kind is not None:
+            stmt = stmt.where(JobRow.kind == filters.kind.value)
+        if filters.mode is not None:
+            stmt = stmt.where(JobRow.mode == filters.mode.value)
+        if filters.author:
+            stmt = stmt.where(func.lower(UserRow.name) == filters.author.lower())
+        if after is not None:
+            stmt = stmt.where(
+                or_(
+                    relevance < after.relevance,
+                    and_(
+                        relevance == after.relevance,
+                        _past(PostRow.published_at, PostRow.id, after.position, older=True),
+                    ),
+                )
+            )
+        with self._sessions() as session:
+            items = []
+            for *row, score in session.execute(stmt):
+                item = self._to_item(*row)
+                item.relevance = score
+                items.append(item)
+            return items
 
     def popular_tags(self, *, prefix: str = "", limit: int) -> list[TagCount]:
         posts = func.count().label("posts")

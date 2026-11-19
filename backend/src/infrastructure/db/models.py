@@ -174,3 +174,18 @@ class PostTagRow(Base):
         ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
     )
     tag: Mapped[str] = mapped_column(String(50), primary_key=True)
+
+
+class PostWordRow(Base):
+    """Search index of every word in a post's description (lower case, hashtags included).
+
+    Rewritten with the description, like post_tags. Searched by prefix: word LIKE 'арбуз%'.
+    """
+
+    __tablename__ = "post_words"
+    __table_args__ = (Index("ix_post_words_word_post_id", "word", "post_id"),)
+
+    post_id: Mapped[UUID] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+    )
+    word: Mapped[str] = mapped_column(String(50), primary_key=True)

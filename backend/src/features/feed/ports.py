@@ -1,7 +1,16 @@
 from typing import Protocol
 from uuid import UUID
 
-from src.features.feed.domain import Comment, CommentView, Cursor, FeedItem, Post, TagCount
+from src.features.feed.domain import (
+    Comment,
+    CommentView,
+    Cursor,
+    FeedItem,
+    Post,
+    SearchCursor,
+    SearchFilters,
+    TagCount,
+)
 
 
 class PostRepository(Protocol):
@@ -30,6 +39,19 @@ class PostRepository(Protocol):
     ) -> list[FeedItem]:
         """Newest first; with `before`, only posts older than that cursor;
         with `tags`, only posts that have every one of them."""
+        ...
+
+    def search(
+        self,
+        filters: SearchFilters,
+        *,
+        viewer_id: UUID,
+        limit: int,
+        after: SearchCursor | None = None,
+    ) -> list[FeedItem]:
+        """Posts having any of the query's terms (all posts if there are none), none of the
+        excluded words, matching the filters; most matched terms first, then newest.
+        Each item's `relevance` is its number of matched terms."""
         ...
 
     def popular_tags(self, *, prefix: str = "", limit: int) -> list[TagCount]:

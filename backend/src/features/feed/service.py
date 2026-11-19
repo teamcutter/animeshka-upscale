@@ -12,11 +12,15 @@ from src.features.feed.domain import (
     FeedItem,
     FeedPage,
     Post,
+    SearchCursor,
+    SearchFilters,
+    SearchPage,
+    SearchQuery,
     TagCount,
     normalize_tag,
 )
 from src.features.feed.ports import CommentRepository, LikeRepository, PostRepository
-from src.features.upscale.domain import FileRole, Job, JobStatus
+from src.features.upscale.domain import FileRole, Job, JobStatus, MediaKind, Mode
 from src.features.upscale.service import UpscaleService
 from src.shared.errors import BadRequestError, ForbiddenError, JobNotReadyError, NotFoundError
 
@@ -131,6 +135,42 @@ class FeedService:
         items = items[:limit]
         last = items[-1].post
         return FeedPage(items=items, next_cursor=Cursor(at=last.published_at, id=last.id))
+
+    def search(
+        self,
+        viewer_id: UUID,
+        *,
+        text: str = "",
+        kind: MediaKind | None = None,
+        mode: Mode | None = None,
+        author: str | None = None,
+        limit: int,
+        cursor: str | None = None,
+    ) -> SearchPage:
+        """Extended search over descriptions and hashtags.
+
+        "арбуз помидор" finds posts with either word (by word start, so also "арбузы"),
+        the ones with both first; "-огурец" drops posts with that word. kind, mode and
+        author narrow the results; with no words at all it is the filtered feed by date.
+        """
+        try:
+            query = SearchQuery.parse(text)
+            after = SearchCursor.decode(cursor) if cursor else None
+        except ValueError as exc:
+            raise BadRequestError(str(exc)) from exc
+        filters = SearchFilters(
+            query=query, kind=kind, mode=mode, author=(author or "").strip() or None
+        )
+        items = self._posts.search(filters, viewer_id=viewer_id, limit=limit + 1, after=after)
+        if len(items) <= limit:
+            return SearchPage(items=items, next_cursor=None, query=query)
+        items = items[:limit]
+        last = items[-1]
+        next_cursor = SearchCursor(
+            relevance=last.relevance,
+            position=Cursor(at=last.post.published_at, id=last.post.id),
+        )
+        return SearchPage(items=items, next_cursor=next_cursor, query=query)
 
     def popular_tags(self, *, prefix: str = "", limit: int) -> list[TagCount]:
         """For search suggestions: tags by number of posts, optionally by prefix."""

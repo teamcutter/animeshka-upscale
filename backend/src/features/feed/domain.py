@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from src.features.upscale.domain import Job, now_utc
+from src.features.upscale.domain import Job, MediaKind, Mode, now_utc
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _MICROSECOND = timedelta(microseconds=1)
@@ -38,6 +38,59 @@ def extract_tags(description: str | None) -> list[str]:
     return list(tags)[:MAX_TAGS_PER_POST]
 
 
+# Search sees a description as words: "#studio_ghibli" gives "studio_ghibli", "studio", "ghibli".
+_WORD = re.compile(r"\w+")
+_WORD_PART = re.compile(r"[^\W_]+")
+SEARCH_QUERY_MAX_LENGTH = 200
+SEARCH_MAX_TERMS = 10
+
+
+def extract_words(description: str | None) -> list[str]:
+    """Lower-case words of a description (hashtags included, without '#') for the search index."""
+    if not description:
+        return []
+    text = description.lower()
+    words = dict.fromkeys(
+        word[:TAG_MAX_LENGTH] for word in (*_WORD.findall(text), *_WORD_PART.findall(text))
+    )
+    return list(words)
+
+
+@dataclass(frozen=True)
+class SearchQuery:
+    """A parsed search: "арбуз #помидор -огурец" -> terms [арбуз, помидор], excluded [огурец].
+
+    Each term matches a word starting with it ("арбуз" finds "арбузы", "#арбузный").
+    """
+
+    terms: tuple[str, ...] = ()
+    excluded: tuple[str, ...] = ()
+
+    @classmethod
+    def parse(cls, text: str) -> "SearchQuery":
+        """Raises ValueError for too many terms."""
+        terms: dict[str, None] = {}
+        excluded: dict[str, None] = {}
+        for token in text.lower().split():
+            target = excluded if token.startswith("-") else terms
+            for word in _WORD.findall(token):
+                target[word[:TAG_MAX_LENGTH]] = None
+        for word in excluded:
+            terms.pop(word, None)
+        if len(terms) > SEARCH_MAX_TERMS or len(excluded) > SEARCH_MAX_TERMS:
+            raise ValueError(f"Too many words in the query (max {SEARCH_MAX_TERMS})")
+        return cls(terms=tuple(terms), excluded=tuple(excluded))
+
+
+@dataclass(frozen=True)
+class SearchFilters:
+    query: SearchQuery = field(default_factory=SearchQuery)
+    kind: MediaKind | None = None
+    mode: Mode | None = None
+    # Display name of the author, case-insensitive.
+    author: str | None = None
+
+
 @dataclass
 class Post:
     """A finished job its owner shared in the public feed."""
@@ -69,6 +122,8 @@ class FeedItem:
     comment_count: int = 0
     # Whether the user reading the feed liked this post.
     liked: bool = False
+    # Search only: how many of the query's words the post has (results are ordered by it).
+    relevance: int = 0
 
 
 @dataclass
@@ -124,3 +179,29 @@ class FeedPage:
 class CommentPage:
     items: list[CommentView]
     next_cursor: Cursor | None
+
+
+@dataclass(frozen=True)
+class SearchCursor:
+    """Next search page: posts after this one in (relevance desc, published_at desc, id desc)."""
+
+    relevance: int
+    position: Cursor
+
+    def encode(self) -> str:
+        return f"{self.relevance}:{self.position.encode()}"
+
+    @classmethod
+    def decode(cls, value: str) -> "SearchCursor":
+        """Raises ValueError if the cursor was not made by encode()."""
+        relevance, sep, position = value.partition(":")
+        if not sep or not relevance.isdigit():
+            raise ValueError(f"Invalid search cursor: {value}")
+        return cls(relevance=int(relevance), position=Cursor.decode(position))
+
+
+@dataclass
+class SearchPage:
+    items: list[FeedItem]
+    next_cursor: SearchCursor | None
+    query: SearchQuery

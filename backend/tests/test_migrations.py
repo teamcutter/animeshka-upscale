@@ -21,7 +21,7 @@ def test_upgrade_and_downgrade(database_url: str) -> None:
     engine = create_db_engine(database_url)
     upgrade_database(engine)
     expected = {"jobs", "files", "metrics", "users", "sessions", "posts", "likes", "comments"}
-    assert expected | {"post_tags"} <= set(inspect(engine).get_table_names())
+    assert expected | {"post_tags", "post_words"} <= set(inspect(engine).get_table_names())
 
     downgrade_database(engine)
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}
