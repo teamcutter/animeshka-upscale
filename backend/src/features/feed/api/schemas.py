@@ -11,6 +11,7 @@ from src.features.feed.domain import (
     CommentView,
     FeedItem,
     FeedPage,
+    SearchPage,
     TagCount,
 )
 from src.features.upscale.api.schemas import FileInfo
@@ -75,6 +76,28 @@ class FeedPageResponse(BaseModel):
         return cls(
             items=[FeedItemResponse.from_item(item, viewer_id) for item in page.items],
             next_cursor=page.next_cursor.encode() if page.next_cursor else None,
+        )
+
+
+class SearchQueryResponse(BaseModel):
+    # How the server understood `q`: for highlighting matches and showing "-word" chips.
+    terms: list[str]
+    excluded: list[str]
+
+
+class SearchPageResponse(BaseModel):
+    items: list[FeedItemResponse]
+    next_cursor: str | None
+    query: SearchQueryResponse
+
+    @classmethod
+    def from_page(cls, page: SearchPage, viewer_id: UUID) -> "SearchPageResponse":
+        return cls(
+            items=[FeedItemResponse.from_item(item, viewer_id) for item in page.items],
+            next_cursor=page.next_cursor.encode() if page.next_cursor else None,
+            query=SearchQueryResponse(
+                terms=list(page.query.terms), excluded=list(page.query.excluded)
+            ),
         )
 
 

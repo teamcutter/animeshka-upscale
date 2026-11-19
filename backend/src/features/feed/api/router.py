@@ -12,11 +12,12 @@ from src.features.feed.api.schemas import (
     DescriptionRequest,
     FeedItemResponse,
     FeedPageResponse,
+    SearchPageResponse,
     TagResponse,
 )
 from src.features.feed.service import FeedService
 from src.features.upscale.api.schemas import JobResponse
-from src.features.upscale.domain import FileRole
+from src.features.upscale.domain import FileRole, MediaKind, Mode
 
 router = APIRouter(prefix="/api", tags=["feed"])
 
@@ -63,6 +64,31 @@ def get_feed(
     """
     page = service.page(user.id, limit=limit, cursor=cursor, tags=tag)
     return FeedPageResponse.from_page(page, user.id)
+
+
+# Declared before /feed/{post_id}, otherwise "search" would be taken for a post id.
+@router.get("/feed/search", response_model=SearchPageResponse)
+def search_feed(
+    user: CurrentUser,
+    service: Service,
+    q: Annotated[str, Query(max_length=200)] = "",
+    kind: MediaKind | None = None,
+    mode: Mode | None = None,
+    author: Annotated[str | None, Query(max_length=64)] = None,
+    limit: Limit = 20,
+    cursor: Annotated[str | None, Query(max_length=80)] = None,
+) -> SearchPageResponse:
+    """Extended search in descriptions and hashtags.
+
+    - `q=арбуз помидор`: posts with either word, those with both first, then newest.
+      A word matches by its start: "арбуз" also finds "арбузы", "#арбузный"; '#' is optional.
+    - `-огурец` in `q`: without posts that have this word.
+    - `kind=image|video`, `mode=2k|4k`, `author=<name>` (case-insensitive): filters.
+    """
+    page = service.search(
+        user.id, text=q, kind=kind, mode=mode, author=author, limit=limit, cursor=cursor
+    )
+    return SearchPageResponse.from_page(page, user.id)
 
 
 @router.get("/tags", response_model=list[TagResponse])

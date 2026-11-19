@@ -14,6 +14,10 @@ def normalize_url(url: str) -> str:
     return parsed.render_as_string(hide_password=False)
 
 
+def _unicode_lower(value: object) -> object:
+    return value.lower() if isinstance(value, str) else value
+
+
 def create_db_engine(url: str) -> Engine:
     url = normalize_url(url)
     parsed = make_url(url)
@@ -30,6 +34,9 @@ def create_db_engine(url: str) -> Engine:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+        # SQLite's own lower() only knows ASCII; PostgreSQL's handles every alphabet.
+        # Same behaviour on both, e.g. for the case-insensitive author filter of the search.
+        dbapi_connection.create_function("lower", 1, _unicode_lower, deterministic=True)
 
     return engine
 
