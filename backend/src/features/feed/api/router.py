@@ -9,8 +9,10 @@ from src.features.feed.api.schemas import (
     CommentPageResponse,
     CommentRequest,
     CommentResponse,
+    DescriptionRequest,
     FeedItemResponse,
     FeedPageResponse,
+    TagResponse,
 )
 from src.features.feed.service import FeedService
 from src.features.upscale.api.schemas import JobResponse
@@ -29,9 +31,16 @@ CursorParam = Annotated[str | None, Query(max_length=64)]
 
 
 @router.post("/jobs/{job_id}/publish", response_model=JobResponse)
-def publish_job(job_id: UUID, user: CurrentUser, service: Service) -> JobResponse:
-    """Share any finished job of mine, image or video, new or old (409 if not done yet)."""
-    return JobResponse.from_job(service.publish(job_id, user.id))
+def publish_job(
+    job_id: UUID, user: CurrentUser, service: Service, body: DescriptionRequest | None = None
+) -> JobResponse:
+    """Share any finished job of mine, image or video, new or old (409 if not done yet).
+
+    The body is optional: `{"description": "Закат #аниме #4k"}`; its hashtags become tags.
+    On an already published job a given description replaces the old one.
+    """
+    description = body.description if body else None
+    return JobResponse.from_job(service.publish(job_id, user.id, description))
 
 
 @router.delete("/jobs/{job_id}/publish", response_model=JobResponse)
@@ -42,15 +51,43 @@ def unpublish_job(job_id: UUID, user: CurrentUser, service: Service) -> JobRespo
 
 @router.get("/feed", response_model=FeedPageResponse)
 def get_feed(
-    user: CurrentUser, service: Service, limit: Limit = 20, cursor: CursorParam = None
+    user: CurrentUser,
+    service: Service,
+    limit: Limit = 20,
+    cursor: CursorParam = None,
+    tag: Annotated[list[str] | None, Query(max_length=10)] = None,
 ) -> FeedPageResponse:
-    """Published works of all users, newest first."""
-    return FeedPageResponse.from_page(service.page(user.id, limit=limit, cursor=cursor), user.id)
+    """Published works of all users, newest first.
+
+    Search by hashtag: `?tag=аниме` (with or without '#'); several `tag` = posts with all of them.
+    """
+    page = service.page(user.id, limit=limit, cursor=cursor, tags=tag)
+    return FeedPageResponse.from_page(page, user.id)
+
+
+@router.get("/tags", response_model=list[TagResponse])
+def get_tags(
+    _: CurrentUser,
+    service: Service,
+    prefix: Annotated[str, Query(max_length=51)] = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> list[TagResponse]:
+    """Most used tags (for search suggestions); `prefix=ани` filters by the beginning."""
+    return [TagResponse.from_count(t) for t in service.popular_tags(prefix=prefix, limit=limit)]
 
 
 @router.get("/feed/{post_id}", response_model=FeedItemResponse)
 def get_post(post_id: UUID, user: CurrentUser, service: Service) -> FeedItemResponse:
     return FeedItemResponse.from_item(service.get_item(post_id, user.id), user.id)
+
+
+@router.patch("/feed/{post_id}", response_model=FeedItemResponse)
+def edit_post(
+    post_id: UUID, body: DescriptionRequest, user: CurrentUser, service: Service
+) -> FeedItemResponse:
+    """Change the description (and so the tags) of my post; 403 for someone else's."""
+    item = service.edit_description(post_id, user.id, body.description)
+    return FeedItemResponse.from_item(item, user.id)
 
 
 # Shown inline (no Content-Disposition: attachment): downloading from the feed comes later.

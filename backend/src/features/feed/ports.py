@@ -1,7 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from src.features.feed.domain import Comment, CommentView, Cursor, FeedItem, Post
+from src.features.feed.domain import Comment, CommentView, Cursor, FeedItem, Post, TagCount
 
 
 class PostRepository(Protocol):
@@ -12,14 +12,28 @@ class PostRepository(Protocol):
 
     def delete_by_job(self, job_id: UUID) -> None: ...
 
+    def set_description(self, post_id: UUID, description: str | None) -> bool:
+        """Replaces the description and re-indexes its tags. False if the post is gone."""
+        ...
+
     def get_item(self, post_id: UUID, viewer_id: UUID) -> FeedItem | None:
         """The post with its like/comment counts and whether `viewer_id` liked it."""
         ...
 
     def list_items(
-        self, *, viewer_id: UUID, limit: int, before: Cursor | None = None
+        self,
+        *,
+        viewer_id: UUID,
+        limit: int,
+        before: Cursor | None = None,
+        tags: list[str] | None = None,
     ) -> list[FeedItem]:
-        """Newest first; with `before`, only posts older than that cursor."""
+        """Newest first; with `before`, only posts older than that cursor;
+        with `tags`, only posts that have every one of them."""
+        ...
+
+    def popular_tags(self, *, prefix: str = "", limit: int) -> list[TagCount]:
+        """Tags by number of posts, most used first; with `prefix`, only tags starting with it."""
         ...
 
 

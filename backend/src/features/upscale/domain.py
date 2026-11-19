@@ -62,6 +62,7 @@ class Job:
     metrics: dict[str, float] = field(default_factory=dict)
     # Set while the owner shares the result in the public feed (see features/feed).
     published_at: datetime | None = None
+    post_id: UUID | None = None
     created_at: datetime = field(default_factory=now_utc)
     updated_at: datetime = field(default_factory=now_utc)
 

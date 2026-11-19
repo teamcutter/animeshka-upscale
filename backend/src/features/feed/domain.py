@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -8,6 +9,33 @@ _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _MICROSECOND = timedelta(microseconds=1)
 
 COMMENT_MAX_LENGTH = 1000
+DESCRIPTION_MAX_LENGTH = 2000
+TAG_MAX_LENGTH = 50
+MAX_TAGS_PER_POST = 30
+
+# A hashtag is '#' followed by letters (any alphabet), digits or '_': #аниме, #4k, #studio_ghibli.
+# Not preceded by a word character, so "a#b" or "C#" in the middle of a word is not a tag.
+_HASHTAG = re.compile(rf"(?<!\w)#(\w{{1,{TAG_MAX_LENGTH}}})(?!\w)")
+_TAG = re.compile(rf"^\w{{1,{TAG_MAX_LENGTH}}}$")
+
+
+def normalize_tag(value: str) -> str:
+    """A tag as stored and searched: no leading '#', lower case.
+
+    Raises ValueError if it isn't a valid tag (letters, digits, '_', up to 50 chars).
+    """
+    tag = value.strip().removeprefix("#").lower()
+    if not _TAG.match(tag):
+        raise ValueError(f"Invalid tag: {value!r}")
+    return tag
+
+
+def extract_tags(description: str | None) -> list[str]:
+    """Hashtags of a description, lower-cased, without repeats, in order of appearance."""
+    if not description:
+        return []
+    tags = dict.fromkeys(match.lower() for match in _HASHTAG.findall(description))
+    return list(tags)[:MAX_TAGS_PER_POST]
 
 
 @dataclass
@@ -17,6 +45,18 @@ class Post:
     job_id: UUID
     id: UUID = field(default_factory=uuid4)
     published_at: datetime = field(default_factory=now_utc)
+    # Free text written by the author; its #hashtags make the post findable by tag.
+    description: str | None = None
+
+    @property
+    def tags(self) -> list[str]:
+        return extract_tags(self.description)
+
+
+@dataclass
+class TagCount:
+    tag: str
+    posts: int
 
 
 @dataclass
